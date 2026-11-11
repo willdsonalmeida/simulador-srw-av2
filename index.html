@@ -1,0 +1,1361 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Revisão para AV2</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;600&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        senai: {
+                            blue: '#005CA9',
+                            darkBlue: '#003A6C',
+                            lightBlue: '#E6F0FA',
+                            orange: '#F37021'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['Fira Code', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .card-flip-container {
+            perspective: 1000px;
+        }
+        .card-flip-inner {
+            transition: transform 0.6s;
+            transform-style: preserve-3d;
+        }
+        .card-flip-container.flipped .card-flip-inner {
+            transform: rotateY(180deg);
+        }
+        .card-front, .card-back {
+            backface-visibility: hidden;
+        }
+        .card-back {
+            transform: rotateY(180deg);
+        }
+        /* Custom scrollbar for terminal */
+        .terminal-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .terminal-scroll::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        .terminal-scroll::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans min-h-screen flex flex-col antialiased selection:bg-senai-blue selection:text-white">
+
+    <!-- Top Navigation Header -->
+    <header class="bg-slate-800/80 backdrop-blur border-b border-slate-700 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-3">
+                    <div class="bg-senai-blue text-white p-2 rounded-lg font-bold flex items-center justify-center w-10 h-10 shadow-lg shadow-senai-blue/30">
+                        <i class="fa-solid fa-server text-xl"></i>
+                    </div>
+                    <div>
+                        <span class="text-xs font-semibold text-senai-orange uppercase tracking-wider block">UNISENAI - Serviços de Redes para Web - Prof. Willdson Almeida - AV2</span>
+                        <h1 class="text-lg font-bold text-white leading-none">Simulador de Revisão Oficial</h1>
+                    </div>
+                </div>
+
+                <!-- Score / XP Counter -->
+                <div class="flex items-center space-x-4">
+                    <div class="bg-slate-900/80 px-3 py-1.5 rounded-full border border-slate-700 flex items-center space-x-2 text-sm">
+                        <i class="fa-solid fa-star text-amber-400"></i>
+                        <span class="text-slate-400">XP:</span>
+                        <span id="user-xp" class="font-bold text-amber-400">0</span>
+                    </div>
+                    <div class="bg-slate-900/80 px-3 py-1.5 rounded-full border border-slate-700 flex items-center space-x-2 text-sm">
+                        <i class="fa-solid fa-bullseye text-emerald-400"></i>
+                        <span class="text-slate-400">Precisão:</span>
+                        <span id="user-accuracy" class="font-bold text-emerald-400">100%</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main App Container -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col">
+
+        <!-- Navigation Tabs -->
+        <div class="flex flex-wrap gap-2 mb-6 border-b border-slate-700 pb-3">
+            <button onclick="switchTab('quiz')" id="tab-quiz" class="tab-btn px-4 py-2.5 rounded-xl font-medium text-sm flex items-center space-x-2 transition bg-senai-blue text-white shadow-md shadow-senai-blue/20">
+                <i class="fa-solid fa-list-check"></i>
+                <span>Simulado de Prova</span>
+            </button>
+            <button onclick="switchTab('flashcards')" id="tab-flashcards" class="tab-btn px-4 py-2.5 rounded-xl font-medium text-sm flex items-center space-x-2 transition bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white">
+                <i class="fa-solid fa-clone"></i>
+                <span>Flashcards Rápido</span>
+            </button>
+            <button onclick="switchTab('terminal')" id="tab-terminal" class="tab-btn px-4 py-2.5 rounded-xl font-medium text-sm flex items-center space-x-2 transition bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white">
+                <i class="fa-solid fa-terminal"></i>
+                <span>Desafio Sysadmin CLI</span>
+            </button>
+            <button onclick="switchTab('cheatsheet')" id="tab-cheatsheet" class="tab-btn px-4 py-2.5 rounded-xl font-medium text-sm flex items-center space-x-2 transition bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white">
+                <i class="fa-solid fa-book-bookmark"></i>
+                <span>Resumo da Matéria</span>
+            </button>
+        </div>
+
+        <!-- TAB CONTENT: SIMULADO / QUIZ -->
+        <section id="view-quiz" class="tab-view flex-grow flex flex-col space-y-6">
+            <!-- Category Filter Bar -->
+            <div class="bg-slate-800/60 p-4 rounded-2xl border border-slate-700 flex flex-wrap items-center justify-between gap-4">
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-xs font-semibold text-slate-400 uppercase mr-2">Filtrar Tópicos:</span>
+                    <button onclick="filterQuiz('all')" class="quiz-filter-btn active text-xs font-semibold px-3 py-1.5 rounded-lg border border-senai-blue bg-senai-blue/20 text-blue-300">Todos os 5 Módulos</button>
+                    <button onclick="filterQuiz('so')" class="quiz-filter-btn text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-slate-400 hover:text-white">1. Sistemas Operacionais</button>
+                    <button onclick="filterQuiz('virt')" class="quiz-filter-btn text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-slate-400 hover:text-white">2. Virtualização e Containers</button>
+                    <button onclick="filterQuiz('web')" class="quiz-filter-btn text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-slate-400 hover:text-white">3. Servidores Web</button>
+                    <button onclick="filterQuiz('cloud')" class="quiz-filter-btn text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-slate-400 hover:text-white">4. Hospedagem na Nuvem</button>
+                    <button onclick="filterQuiz('sec')" class="quiz-filter-btn text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900 text-slate-400 hover:text-white">5. Segurança e IAM</button>
+                </div>
+                <button onclick="resetQuiz()" class="text-xs font-medium text-slate-400 hover:text-slate-200 flex items-center space-x-1">
+                    <i class="fa-solid fa-rotate-right"></i>
+                    <span>Reiniciar Respostas</span>
+                </button>
+            </div>
+
+            <!-- Quiz Card Container -->
+            <div class="bg-slate-800 border border-slate-700 rounded-3xl p-6 sm:p-8 flex flex-col justify-between shadow-2xl relative overflow-hidden flex-grow">
+                
+                <!-- Question Header -->
+                <div>
+                    <div class="flex items-center justify-between mb-4">
+                        <span id="question-badge" class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                            Módulo: Segurança
+                        </span>
+                        <span id="question-counter" class="text-sm font-semibold text-slate-400">
+                            Questão 1 de 12
+                        </span>
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div class="w-full bg-slate-700 h-2 rounded-full overflow-hidden mb-6">
+                        <div id="quiz-progress-bar" class="bg-senai-blue h-full transition-all duration-300 w-0"></div>
+                    </div>
+
+                    <!-- Question Prompt -->
+                    <h2 id="question-text" class="text-xl sm:text-2xl font-bold text-white mb-6 leading-relaxed">
+                        Carregando pergunta...
+                    </h2>
+                </div>
+
+                <!-- Options Grid -->
+                <div id="options-container" class="grid grid-cols-1 gap-3 my-4">
+                    <!-- Dynamic options generated by JS -->
+                </div>
+
+                <!-- Explanation Box (Initially Hidden) -->
+                <div id="explanation-box" class="hidden mt-6 p-5 rounded-2xl border transition-all">
+                    <div class="flex items-start space-x-3">
+                        <div id="explanation-icon" class="text-2xl mt-0.5"></div>
+                        <div class="flex-1">
+                            <h4 id="explanation-title" class="font-bold text-base mb-1"></h4>
+                            <p id="explanation-text" class="text-sm text-slate-300 leading-relaxed"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quiz Navigation Controls -->
+                <div class="flex items-center justify-between mt-8 pt-4 border-t border-slate-700">
+                    <button id="btn-prev" onclick="navigateQuiz(-1)" class="px-5 py-2.5 rounded-xl border border-slate-600 bg-slate-900 text-slate-300 hover:bg-slate-700 hover:text-white font-medium text-sm flex items-center space-x-2 transition disabled:opacity-40 disabled:cursor-not-allowed">
+                        <i class="fa-solid fa-arrow-left"></i>
+                        <span>Anterior</span>
+                    </button>
+
+                    <button id="btn-next" onclick="navigateQuiz(1)" class="px-6 py-2.5 rounded-xl bg-senai-blue hover:bg-blue-600 text-white font-semibold text-sm flex items-center space-x-2 transition shadow-lg shadow-senai-blue/20">
+                        <span>Próxima</span>
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB CONTENT: FLASHCARDS -->
+        <section id="view-flashcards" class="tab-view hidden flex-grow flex flex-col">
+            <div class="text-center max-w-xl mx-auto mb-6">
+                <h3 class="text-2xl font-bold text-white mb-2">Cartões de Estudo Rápido</h3>
+                <p class="text-sm text-slate-400">Clique no cartão para girar e ver a resposta/conceito explicativo. Teste a sua memória das definições essenciais.</p>
+            </div>
+
+            <!-- Flashcard Display -->
+            <div class="flex-grow flex flex-col items-center justify-center">
+                <div class="card-flip-container w-full max-w-2xl h-80 cursor-pointer" onclick="flipFlashcard()">
+                    <div id="flashcard-inner" class="card-flip-inner w-full h-full relative">
+                        
+                        <!-- Front side -->
+                        <div class="card-front absolute inset-0 bg-slate-800 border-2 border-slate-700 hover:border-senai-blue rounded-3xl p-8 flex flex-col justify-between shadow-2xl items-center text-center">
+                            <span id="fc-category" class="text-xs font-bold text-senai-orange uppercase tracking-wider bg-senai-orange/10 px-3 py-1 rounded-full border border-senai-orange/20">REDE & SEGURANÇA</span>
+                            <h3 id="fc-question" class="text-2xl sm:text-3xl font-extrabold text-white">Qual a diferença fundamental entre Firewall L3/L4 e WAF (L7)?</h3>
+                            <span class="text-xs text-slate-400 flex items-center space-x-1">
+                                <i class="fa-solid fa-rotate"></i>
+                                <span>Clique para ver a resposta</span>
+                            </span>
+                        </div>
+
+                        <!-- Back side -->
+                        <div class="card-back absolute inset-0 bg-slate-800 border-2 border-emerald-500/50 rounded-3xl p-8 flex flex-col justify-between shadow-2xl items-center text-center bg-gradient-to-b from-slate-800 to-slate-900">
+                            <span class="text-xs font-bold text-emerald-400 uppercase tracking-wider bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">RESPOSTA / CONCEITO</span>
+                            <p id="fc-answer" class="text-base sm:text-lg text-slate-200 leading-relaxed">
+                                Firewalls L3/L4 filtram apenas por Endereços IP e Portas. O WAF opera na Camada 7 (Aplicação) inspecionando a requisição HTTP por ataques de código como SQL Injection e XSS.
+                            </p>
+                            <span class="text-xs text-slate-400 flex items-center space-x-1">
+                                <i class="fa-solid fa-rotate"></i>
+                                <span>Clique para retornar a pergunta</span>
+                            </span>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Flashcard Nav Controls -->
+                <div class="flex items-center space-x-6 mt-8">
+                    <button onclick="prevFlashcard()" class="w-12 h-12 rounded-full bg-slate-800 border border-slate-700 hover:bg-slate-700 flex items-center justify-center text-slate-300 hover:text-white transition">
+                        <i class="fa-solid fa-chevron-left text-lg"></i>
+                    </button>
+                    <span id="fc-counter" class="text-sm font-semibold text-slate-400">Cartão 1 de 10</span>
+                    <button onclick="nextFlashcard()" class="w-12 h-12 rounded-full bg-slate-800 border border-slate-700 hover:bg-slate-700 flex items-center justify-center text-slate-300 hover:text-white transition">
+                        <i class="fa-solid fa-chevron-right text-lg"></i>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB CONTENT: TERMINAL CHALLENGE -->
+        <section id="view-terminal" class="tab-view hidden flex-grow flex flex-col">
+            <div class="bg-slate-800/80 border border-slate-700 p-4 rounded-2xl mb-4 flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h3 class="text-lg font-bold text-white flex items-center space-x-2">
+                        <i class="fa-solid fa-terminal text-emerald-400"></i>
+                        <span>Simulador Terminal Sysadmin / DevOps</span>
+                    </h3>
+                    <p class="text-xs text-slate-400">Execute os comandos sugeridos para resolver problemas de infraestrutura no Linux e Cloud.</p>
+                </div>
+                <div class="flex items-center space-x-2 text-xs">
+                    <span class="text-slate-400">Desafio Atual:</span>
+                    <span id="task-badge" class="font-bold text-amber-400 bg-amber-400/10 px-2.5 py-1 rounded-lg border border-amber-400/20">1. Verificar consumo de RAM/CPU</span>
+                </div>
+            </div>
+
+            <!-- Terminal Window -->
+            <div class="bg-slate-950 border border-slate-800 rounded-3xl overflow-hidden flex flex-col flex-grow shadow-2xl font-mono text-sm">
+                <!-- Terminal Header Bar -->
+                <div class="bg-slate-900 px-4 py-3 border-b border-slate-800 flex items-center justify-between">
+                    <div class="flex items-center space-x-2">
+                        <div class="w-3 h-3 rounded-full bg-rose-500"></div>
+                        <div class="w-3 h-3 rounded-full bg-amber-500"></div>
+                        <div class="w-3 h-3 rounded-full bg-emerald-500"></div>
+                        <span class="text-xs text-slate-500 ml-2">root@unisenai-server:~</span>
+                    </div>
+                    <button onclick="clearTerminal()" class="text-xs text-slate-500 hover:text-slate-300">
+                        <i class="fa-solid fa-trash-can mr-1"></i> Limpar
+                    </button>
+                </div>
+
+                <!-- Terminal Output Container -->
+                <div id="terminal-body" class="p-4 flex-grow overflow-y-auto terminal-scroll space-y-3 min-h-[350px]">
+                    <div class="text-slate-400">
+                        Bem-vindo ao Terminal de Treinamento Linux / DevOps UNISENAI.<br>
+                        Digite <span class="text-emerald-400 font-bold">help</span> para listar os comandos de simulado disponíveis.
+                    </div>
+                </div>
+
+                <!-- Terminal Input Bar -->
+                <form onsubmit="handleTerminalSubmit(event)" class="bg-slate-900 px-4 py-3 border-t border-slate-800 flex items-center space-x-2">
+                    <span class="text-emerald-400 font-bold">root@unisenai-server:#</span>
+                    <input type="text" id="terminal-input" class="bg-transparent flex-grow text-slate-100 focus:outline-none font-mono" placeholder="Digite um comando (ex: top, nginx -t, tail /var/log/syslog)..." autocomplete="off">
+                    <button type="submit" class="text-emerald-400 hover:text-emerald-300 font-bold px-3 py-1">
+                        Executar
+                    </button>
+                </form>
+            </div>
+
+            <!-- Quick Command Shortcut Buttons -->
+            <div class="mt-4 flex flex-wrap gap-2 text-xs">
+                <span class="text-slate-500 self-center mr-1">Atalhos Práticos:</span>
+                <button onclick="executeQuickCmd('top')" class="px-2.5 py-1 bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 rounded-lg">top</button>
+                <button onclick="executeQuickCmd('nginx -t')" class="px-2.5 py-1 bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 rounded-lg">nginx -t</button>
+                <button onclick="executeQuickCmd('tail -n 20 /var/log/syslog')" class="px-2.5 py-1 bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 rounded-lg">tail syslog</button>
+                <button onclick="executeQuickCmd('curl -I http://meusite.com/?id=1\' OR \'1\'=\'1')" class="px-2.5 py-1 bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 rounded-lg">testar WAF</button>
+                <button onclick="executeQuickCmd('docker ps')" class="px-2.5 py-1 bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 rounded-lg">docker ps</button>
+                <button onclick="executeQuickCmd('ip a')" class="px-2.5 py-1 bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 rounded-lg">ip a</button>
+                <button onclick="executeQuickCmd('systemctl status apache2')" class="px-2.5 py-1 bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 rounded-lg">systemctl</button>
+                <button onclick="executeQuickCmd('chmod 770 /srv/projeto')" class="px-2.5 py-1 bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 rounded-lg">chmod</button>
+                <button onclick="executeQuickCmd('cat /etc/os-release')" class="px-2.5 py-1 bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 rounded-lg">os-release</button>
+            </div>
+        </section>
+
+        <!-- TAB CONTENT: CHEATSHEET / RESUMO -->
+        <section id="view-cheatsheet" class="tab-view hidden flex-grow">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                
+                <!-- Topic 1 -->
+                <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5">
+                    <div class="flex items-center space-x-3 mb-3 text-blue-400">
+                        <i class="fa-solid fa-desktop text-xl"></i>
+                        <h4 class="font-bold text-lg text-white">1. Sistemas Operacionais</h4>
+                    </div>
+                    <ul class="text-sm text-slate-300 space-y-2 list-disc list-inside">
+                        <li><strong class="text-white">Desktop vs Servidor:</strong> Servidor foca em CLI, processos em background, alta disponibilidade (uptime) e sem GUI pesada.</li>
+                        <li><strong class="text-white">Linux:</strong> Rei da Nuvem e Web. Licença GPL. Distribuições: RHEL/Rocky, Ubuntu Server.</li>
+                        <li><strong class="text-white">BSD:</strong> FreeBSD (ZFS, alta performance de rede), OpenBSD (Foco total em segurança padrão). Licença BSD permissiva.</li>
+                        <li><strong class="text-white">Windows Server:</strong> Soberano em Redes Internas. Usa GUI + PowerShell. Destaque para o Active Directory (AD DS) e IIS.</li>
+                    </ul>
+                </div>
+
+                <!-- Topic 2 -->
+                <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5">
+                    <div class="flex items-center space-x-3 mb-3 text-purple-400">
+                        <i class="fa-solid fa-cubes text-xl"></i>
+                        <h4 class="font-bold text-lg text-white">2. Virtualização & Containers</h4>
+                    </div>
+                    <ul class="text-sm text-slate-300 space-y-2 list-disc list-inside">
+                        <li><strong class="text-white">Hypervisors (VMs):</strong> Tipo 1 (Bare Metal - VMware ESXi, Proxmox, KVM, Hyper-V) vs Tipo 2 (Hosted - VirtualBox).</li>
+                        <li><strong class="text-white">VM vs Container:</strong> Máquinas Virtuais emulam todo o SO + Kernel (pesadas). Containers compartilham o Kernel do hospedeiro (leves).</li>
+                        <li><strong class="text-white">Docker vs LXC:</strong> Docker é voltado a aplicação isolada/microsserviços. LXC cria containers de sistema (estilo VM leve).</li>
+                        <li><strong class="text-white">Kubernetes (K8s):</strong> Orquestrador para gerenciar múltiplos containers em escala.</li>
+                    </ul>
+                </div>
+
+                <!-- Topic 3 -->
+                <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5">
+                    <div class="flex items-center space-x-3 mb-3 text-emerald-400">
+                        <i class="fa-solid fa-globe text-xl"></i>
+                        <h4 class="font-bold text-lg text-white">3. Servidores Web</h4>
+                    </div>
+                    <ul class="text-sm text-slate-300 space-y-2 list-disc list-inside">
+                        <li><strong class="text-white">Apache:</strong> Baseado em processos/threads. Suporta configurações descentralizadas (.htaccess).</li>
+                        <li><strong class="text-white">Nginx:</strong> Orientado a Eventos (assíncrono). Resolve o problema C10k com consumo mínimo de RAM. Excelente Proxy Reverso.</li>
+                        <li><strong class="text-white">IIS:</strong> Servidor web nativo do Windows Server. Integração nativa com .NET, web.config e Active Directory.</li>
+                        <li><strong class="text-white">Proxy Reverso:</strong> Esconde os servidores backend, faz balanceamento de carga (Load Balancer) e terminação SSL/TLS.</li>
+                    </ul>
+                </div>
+
+                <!-- Topic 4 -->
+                <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5">
+                    <div class="flex items-center space-x-3 mb-3 text-amber-400">
+                        <i class="fa-solid fa-cloud text-xl"></i>
+                        <h4 class="font-bold text-lg text-white">4. Hospedagem na Nuvem</h4>
+                    </div>
+                    <ul class="text-sm text-slate-300 space-y-2 list-disc list-inside">
+                        <li><strong class="text-white">CAPEX vs OPEX:</strong> CAPEX = Investimento inicial em hardware (On-premises). OPEX = Despesa operacional sob demanda (Cloud).</li>
+                        <li><strong class="text-white">Pirâmide As-a-Service:</strong> 
+                            <br>- <em>IaaS:</em> Infraestrutura pura (ex: AWS EC2, Azure VM).
+                            <br>- <em>PaaS:</em> Plataforma pronta para subir código (ex: Elastic Beanstalk).
+                            <br>- <em>SaaS:</em> Software pronto para uso (ex: Google Workspace, Office 365).
+                        </li>
+                        <li><strong class="text-white">Elasticidade / Auto-Scaling:</strong> Aumenta/diminui instâncias automaticamente conforme demanda.</li>
+                    </ul>
+                </div>
+
+                <!-- Topic 5 -->
+                <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5 md:col-span-2 lg:col-span-2">
+                    <div class="flex items-center space-x-3 mb-3 text-rose-400">
+                        <i class="fa-solid fa-shield-halved text-xl"></i>
+                        <h4 class="font-bold text-lg text-white">5. Segurança, Logs e IAM</h4>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm text-slate-300">
+                        <div>
+                            <h5 class="font-bold text-slate-200 border-b border-slate-700 pb-1 mb-2">Camadas de Defesa</h5>
+                            <p class="mb-1"><strong class="text-white">Firewall L3/L4:</strong> Filtra apenas por IP de origem/destino e Porta de rede.</p>
+                            <p class="mb-1"><strong class="text-white">WAF (L7):</strong> Analisa o payload HTTP. Bloqueia ataques web como SQL Injection e XSS.</p>
+                            <p><strong class="text-white">IDS vs IPS:</strong> IDS é passivo (escuta e gera alertas/câmera). IPS é ativo (intercepta e bloqueia pacotes/segurança na porta).</p>
+                        </div>
+                        <div>
+                            <h5 class="font-bold text-slate-200 border-b border-slate-700 pb-1 mb-2">IAM & Auditoria</h5>
+                            <p class="mb-1"><strong class="text-white">IAM (Identidades):</strong> AD/LDAP/RADIUS centralizam login em múltiplos servidores, evitando criar contas locais em cada máquina.</p>
+                            <p class="mb-1"><strong class="text-white">Syslog:</strong> Protocolo padrão de coleta e centralização de logs do sistema.</p>
+                            <p><strong class="text-white">SIEM:</strong> Plataforma que correlaciona logs de múltiplos servidores em busca de ameaças ativas.</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-slate-950 border-t border-slate-800 py-4 text-center text-xs text-slate-500">
+        <p>Desenvolvido para revisão da prova oficial • UNISENAI - Serviços de Redes para Web - Prof. Willdson Almeida - AV2</p>
+    </footer>
+
+    <!-- JavaScript Game Logic -->
+    <script>
+        // QUESTION BANK based on source material provided in prompt
+        const questionBank = [
+            // --- MÓDULO 1: SISTEMAS OPERACIONAIS (10 Questões) ---
+            {
+                id: 1, category: 'so', categoryLabel: 'Sistemas Operacionais', correct: 0,
+                question: 'Qual a principal diferença de foco arquitetural entre um Sistema Operacional para Desktop e um Sistema Operacional projetado para Servidores corporativos?',
+                options: [
+                    'O Desktop foca na Interface Gráfica (GUI) para resposta ao usuário, enquanto o Servidor prioriza CLI e processos em background para garantir alta disponibilidade.',
+                    'O Servidor exige a utilização exclusiva de placas de vídeo dedicadas, enquanto o Desktop opera perfeitamente apenas com processamento via linha de comando básico.',
+                    'O Desktop é projetado para operar sem reinicializações durante meses, enquanto o Servidor precisa ser reiniciado diariamente para limpar o cache da memória RAM.',
+                    'Sistemas de Servidor bloqueiam nativamente o acesso à internet externa, ao passo que os sistemas Desktop possuem rotas liberadas automaticamente para a web.',
+                    'Não existe qualquer diferença no Kernel ou na gestão de recursos, sendo a nomenclatura apenas uma estratégia comercial de licenciamento de software.'
+                ],
+                explanation: 'Servidores operam majoritariamente via CLI para economizar memória e CPU, priorizando a execução ininterrupta de serviços em background (uptime).'
+            },
+            {
+                id: 2, category: 'so', categoryLabel: 'Sistemas Operacionais', correct: 1,
+                question: 'Ao explorar a estrutura de diretórios do Linux (FHS), um analista precisa localizar os arquivos de configuração global do sistema e dos serviços. Em qual diretório ele deve procurar?',
+                options: [
+                    'No diretório /home, que armazena os perfis de configuração global juntamente com os documentos pessoais de todos os usuários do sistema operacional.',
+                    'No diretório /etc, que centraliza todos os arquivos de configuração estáticos necessários para a inicialização e operação dos serviços em background.',
+                    'No diretório /var, responsável por guardar as configurações permanentes e imutáveis da máquina, garantindo que não sejam perdidas na reinicialização.',
+                    'No diretório /bin, que além de conter os executáveis essenciais, também abriga as configurações de rede e as credenciais de segurança do administrador.',
+                    'No diretório /root, que funciona como o repositório principal de todas as configurações de rede e serviços disponíveis para acesso público na web.'
+                ],
+                explanation: 'O diretório /etc é o padrão do FHS (Filesystem Hierarchy Standard) para armazenar os arquivos de configuração globais do host e dos serviços instalados.'
+            },
+            {
+                id: 3, category: 'so', categoryLabel: 'Sistemas Operacionais', correct: 2,
+                question: 'A família BSD compartilha raízes com o Unix, mas possui diferenças notáveis. Qual é a característica marcante do OpenBSD em comparação com as distribuições Linux?',
+                options: [
+                    'O OpenBSD foca exclusivamente em fornecer a melhor interface gráfica do mercado, sacrificando o desempenho em rede para melhorar a usabilidade visual.',
+                    'A principal característica é a dependência obrigatória de serviços em nuvem da Microsoft para autenticar os usuários locais em sua base de dados central.',
+                    'Possui como marca registrada a filosofia de Segurança por Padrão (Security by Default), sendo alvo de auditorias contínuas de código e berço do OpenSSH.',
+                    'O sistema foi projetado unicamente para rodar aplicações construídas em Java, não possuindo suporte nativo para bancos de dados ou servidores web modernos.',
+                    'A licença do OpenBSD proíbe o seu uso em ambientes corporativos comerciais, restringindo o sistema apenas para instituições de ensino e estudantes acadêmicos.'
+                ],
+                explanation: 'O OpenBSD é mundialmente famoso pela sua orientação estrita à segurança cibernética proativa, sendo a base do projeto OpenSSH amplamente utilizado.'
+            },
+            {
+                id: 4, category: 'so', categoryLabel: 'Sistemas Operacionais', correct: 3,
+                question: 'Em relação ao controle de permissões no Linux, o comando "chmod 770 /srv/projeto" aplica qual configuração de acesso ao diretório especificado?',
+                options: [
+                    'Concede acesso total de leitura e escrita para todos os usuários do sistema, ignorando as restrições impostas pelo dono do arquivo e pelo grupo associado.',
+                    'Remove todas as permissões do proprietário do arquivo, mas concede privilégios absolutos de execução para qualquer visitante anônimo na rede local.',
+                    'Permite que apenas o dono do arquivo possa modificar seu conteúdo, bloqueando inteiramente a leitura e a execução para os membros do grupo do projeto.',
+                    'O dono e os membros do grupo possuem permissão total (ler, escrever, executar), enquanto os outros usuários não possuem nenhum tipo de acesso à pasta.',
+                    'Altera a propriedade do diretório para o usuário root e impõe que os demais usuários possam apenas listar os arquivos, sem permissão de modificá-los.'
+                ],
+                explanation: 'No modelo rwx (4=leitura, 2=escrita, 1=execução), o 7 significa total (4+2+1). Logo, 770 = Total para Dono, Total para Grupo, Zero para Outros.'
+            },
+            {
+                id: 5, category: 'so', categoryLabel: 'Sistemas Operacionais', correct: 4,
+                question: 'O systemd é o gerenciador de inicialização padrão do Debian 13. Para garantir que o servidor web Apache (apache2) inicie automaticamente sempre que a máquina for reiniciada, qual comando deve ser usado?',
+                options: [
+                    'O comando "sudo systemctl start apache2", que inicia o processo imediatamente e grava a regra de inicialização permanente no arquivo de boot do sistema.',
+                    'O comando "sudo systemctl restart apache2", que reinicia o serviço atual e também configura o kernel para ignorar falhas futuras de energia no data center.',
+                    'O comando "sudo systemctl status apache2", que exibe as métricas de inicialização e bloqueia alterações manuais no servidor web até a próxima reinicialização.',
+                    'O comando "sudo systemctl disable apache2", que desativa temporariamente as dependências de rede, forçando o serviço a subir junto com a interface local.',
+                    'O comando "sudo systemctl enable apache2", que cria os links simbólicos necessários para que o daemon do serviço seja ativado durante a sequência de boot.'
+                ],
+                explanation: 'Para configurar um serviço para inicialização automática no boot (habilitar o serviço), o comando correto e padrão do systemd é o "enable".'
+            },
+            {
+                id: 6, category: 'so', categoryLabel: 'Sistemas Operacionais', correct: 0,
+                question: 'Em um ambiente corporativo com centenas de estações Windows, o administrador precisa impedir o uso de pendrives USB em todas as máquinas simultaneamente. Qual recurso do Windows Server possibilita essa ação?',
+                options: [
+                    'As Políticas de Grupo (GPO) através do Active Directory, que permitem centralizar e aplicar regras de segurança e configurações massivamente nos computadores.',
+                    'O serviço de proxy reverso integrado ao IIS, que filtra o acesso aos dispositivos de armazenamento removível utilizando certificados digitais de criptografia.',
+                    'O protocolo RADIUS nativo, que além de autenticar a rede Wi-Fi, gerencia o fluxo de gravação de dados diretamente nos dispositivos USB do usuário final.',
+                    'A utilização de Containers Hyper-V isolados, que virtualizam o ambiente de trabalho e ocultam as portas físicas USB do sistema operacional convidado.',
+                    'A execução de um script em Bash via WSL (Windows Subsystem for Linux), disparado remotamente para alterar o registro de cada máquina individualmente.'
+                ],
+                explanation: 'As GPOs (Group Policy Objects) são a espinha dorsal da administração em massa no Windows Server, permitindo restrições de hardware e software em toda a rede.'
+            },
+            {
+                id: 7, category: 'so', categoryLabel: 'Sistemas Operacionais', correct: 1,
+                question: 'Qual o papel fundamental do gerenciador de pacotes "APT" (Advanced Package Tool) em distribuições derivadas do Debian, como o Ubuntu Server?',
+                options: [
+                    'Ele é responsável exclusivo pela virtualização do Kernel, garantindo que as aplicações rodem em ambientes isolados sem consumir memória adicional.',
+                    'Ele gerencia o download, a instalação, a atualização e a resolução automática de dependências de softwares a partir de repositórios online centralizados.',
+                    'Ele atua como um firewall de camada 7, inspecionando todos os pacotes de rede que chegam à máquina e bloqueando aqueles com assinaturas maliciosas.',
+                    'Ele substitui a função do systemd, controlando os processos que são iniciados no boot da máquina através de scripts estruturados em linguagem Python.',
+                    'Ele é o protocolo de rede usado para transferir arquivos gigantes entre dois servidores Linux, substituindo soluções antigas como o FTP e o servidor Samba.'
+                ],
+                explanation: 'O APT abstrai a complexidade de compilar programas, resolvendo árvores de dependências e gerenciando o ciclo de vida dos softwares (instalação e atualização).'
+            },
+            {
+                id: 8, category: 'so', categoryLabel: 'Sistemas Operacionais', correct: 2,
+                question: 'O administrador de sistemas precisa analisar em tempo real os processos que estão consumindo mais CPU e Memória RAM no servidor Linux. Qual utilitário de linha de comando é mais apropriado para essa tarefa interativa?',
+                options: [
+                    'O utilitário "df -h", que exibe a tabela de processos ordenada por taxa de gravação no disco e monitora o limite de quota de memória alocada aos usuários.',
+                    'O utilitário "ip a", que lista a banda consumida por cada aplicação, mostrando gargalos de tráfego de forma contínua durante a análise do servidor web.',
+                    'O utilitário "top" ou "htop", que apresenta uma interface dinâmica no terminal exibindo o PID, o usuário e a porcentagem exata de CPU e RAM por processo ativo.',
+                    'O utilitário "chmod", que além de gerenciar permissões, oferece um painel oculto de monitoramento de performance para os serviços críticos do sistema base.',
+                    'O utilitário "tail -f /var/log/syslog", que compila os logs de hardware em um gráfico interativo mostrando os picos de consumo do processador e memória cache.'
+                ],
+                explanation: 'Os comandos "top" e "htop" fornecem um painel de monitoramento dinâmico e contínuo, sendo ferramentas essenciais para identificar gargalos de recursos.'
+            },
+            {
+                id: 9, category: 'so', categoryLabel: 'Sistemas Operacionais', correct: 3,
+                question: 'Sobre a arquitetura de virtualização com WSL (Windows Subsystem for Linux) comparada ao uso tradicional de Máquinas Virtuais (como o VirtualBox), é correto afirmar que:',
+                options: [
+                    'O VirtualBox compartilha o Kernel do Windows com o Linux, o que o torna infinitamente mais leve e rápido do que o WSL em tarefas de processamento de dados.',
+                    'O WSL versão 2 exige a instalação de uma interface gráfica obrigatória (GUI) baseada em GNOME para que o terminal Bash possa ser acessado pelo desenvolvedor.',
+                    'As Máquinas Virtuais no VirtualBox não suportam configurações de rede isoladas, sendo o WSL a única solução possível para testes seguros de conectividade.',
+                    'O WSL 2 utiliza um hypervisor leve integrado e otimizado ao Windows, oferecendo melhor performance e integração de arquivos em relação a VMs tradicionais.',
+                    'Não existe diferença técnica entre os dois, ambos exigem a alocação antecipada e fixa de metade da memória RAM do computador hospedeiro para funcionar.'
+                ],
+                explanation: 'O WSL 2 utiliza a tecnologia Hyper-V por baixo dos panos de forma otimizada, oferecendo boot rápido, alocação dinâmica de RAM e integração direta com os arquivos do Windows.'
+            },
+            {
+                id: 10, category: 'so', categoryLabel: 'Sistemas Operacionais', correct: 4,
+                question: 'No processo de administração Linux, por que é considerada uma má prática de segurança trabalhar o tempo todo logado diretamente como o superusuário "root"?',
+                options: [
+                    'Porque o usuário root não tem permissão de acessar o diretório /home, impossibilitando a leitura de scripts importantes armazenados nos perfis dos funcionários.',
+                    'Porque o sistema operacional cobra licenciamento extra baseado no tempo de conexão contínua da conta root durante operações remotas com o protocolo SSH.',
+                    'Porque o usuário root é impedido pelo Kernel de instalar novos pacotes via APT, forçando o uso de usuários comuns para compilar códigos de código aberto.',
+                    'Porque a conta root consome permanentemente 50% da CPU do servidor apenas por estar ativa, causando lentidão sistêmica em aplicações web rodando simultaneamente.',
+                    'Porque um erro de digitação acidental ou um script malicioso executado com privilégios irrestritos pode danificar irreversivelmente o sistema operacional inteiro.'
+                ],
+                explanation: 'A melhor prática (Princípio do Menor Privilégio) determina o uso de um usuário comum, elevando privilégios temporariamente apenas quando necessário via comando "sudo".'
+            },
+
+            // --- MÓDULO 2: VIRTUALIZAÇÃO & CONTAINERS (10 Questões) ---
+            {
+                id: 11, category: 'virt', categoryLabel: 'Virtualização e Containers', correct: 0,
+                question: 'Em uma arquitetura de Data Center moderno, por que um Arquiteto de Nuvem escolheria implementar um Hypervisor do Tipo 1 (Bare Metal) em vez de um Hypervisor do Tipo 2 (Hosted)?',
+                options: [
+                    'O Tipo 1 é instalado diretamente sobre o hardware físico, eliminando o overhead de um sistema operacional intermediário e maximizando o desempenho das VMs.',
+                    'O Tipo 1 depende exclusivamente do sistema operacional Windows Server, facilitando a integração nativa com o Active Directory para autenticar máquinas locais.',
+                    'O Tipo 2 é voltado exclusivamente para aplicações em nuvem, enquanto o Tipo 1 serve apenas para testes básicos de desenvolvimento em laptops de programadores.',
+                    'O Tipo 1 consome significativamente mais energia elétrica, mas é a única tecnologia do mercado que permite rodar instâncias do Kubernetes sem usar Docker.',
+                    'O Tipo 1 impede o isolamento de rede virtual, sendo utilizado apenas em infraestruturas onde todas as máquinas compartilham o mesmo IP público obrigatoriamente.'
+                ],
+                explanation: 'Hypervisors Tipo 1 (como VMware ESXi e Proxmox) removem a camada do SO hospedeiro, entregando acesso direto à CPU e Memória para máxima eficiência.'
+            },
+            {
+                id: 12, category: 'virt', categoryLabel: 'Virtualização e Containers', correct: 1,
+                question: 'Qual a diferença técnica fundamental que explica o motivo de Containers (como os gerenciados pelo Docker) serem muito mais leves e rápidos de inicializar do que Máquinas Virtuais (VMs) convencionais?',
+                options: [
+                    'Containers processam todos os dados utilizando a placa de vídeo (GPU) da máquina host, deixando a CPU livre exclusivamente para o uso do sistema operacional local.',
+                    'A VM emula o hardware inteiro e carrega um Kernel próprio e completo, enquanto os Containers isolam apenas os processos compartilhando o mesmo Kernel do host.',
+                    'Containers armazenam os arquivos temporários diretamente na nuvem da Amazon (AWS), economizando totalmente o espaço do disco rígido do servidor físico local.',
+                    'A VM exige que cada aplicação seja programada em linguagens compiladas, ao passo que os Containers aceitam apenas scripts interpretados nativamente em Node.js.',
+                    'Containers não possuem capacidade de alocar memória RAM, funcionando exclusivamente através de leitura em disco, o que os torna virtualmente instantâneos.'
+                ],
+                explanation: 'Enquanto VMs carregam cópias pesadas de um Sistema Operacional completo, containers isolam apenas a aplicação (via namespaces), aproveitando o Kernel subjacente.'
+            },
+            {
+                id: 13, category: 'virt', categoryLabel: 'Virtualização e Containers', correct: 2,
+                question: 'Dentro do ecossistema open source de infraestrutura, o Proxmox VE ganhou grande tração no mercado corporativo. Quais são as duas tecnologias de virtualização que o Proxmox integra nativamente em sua interface web?',
+                options: [
+                    'O VirtualBox para emulação de hardware focado em desktop e o Docker Swarm para o balanceamento de microsserviços em múltiplas instâncias na nuvem.',
+                    'O VMware vSphere para gerenciamento de nuvem privada corporativa e o Kubernetes para a orquestração massiva de pods em ambientes distribuídos.',
+                    'O KVM (Kernel-based Virtual Machine) para criação de Máquinas Virtuais pesadas e completas, e o LXC (Linux Containers) para containers de sistema leves.',
+                    'O Hyper-V para máquinas baseadas na arquitetura Microsoft Windows e o Azure Stack para replicação assíncrona de armazenamento de arquivos distribuídos.',
+                    'O XenServer para alocação direta de memória RAM e o OpenShift para provisionamento automatizado de aplicações baseadas exclusivamente em linguagem Java.'
+                ],
+                explanation: 'O Proxmox unifica o robusto KVM (hypervisor de hardware) e o ágil LXC (container de sistema) no mesmo cluster de gerência de datacenter.'
+            },
+            {
+                id: 14, category: 'virt', categoryLabel: 'Virtualização e Containers', correct: 3,
+                question: 'Uma startup migrou sua aplicação monolítica para 500 microsserviços empacotados em Containers Docker. Qual a função de ferramentas de orquestração como o Kubernetes (K8s) nesse cenário complexo?',
+                options: [
+                    'Limitar o acesso de usuários externos ao painel de controle do banco de dados, atuando como um firewall de aplicação especializado em bloquear tráfego malicioso.',
+                    'Otimizar a compilação do código fonte da aplicação em linguagem C, gerando imagens Docker com tamanho reduzido antes do deploy final nos servidores Linux.',
+                    'Criar cópias de backup semanais de todos os dados gerados pelos clientes e transferi-los automaticamente para um servidor de armazenamento off-site na nuvem.',
+                    'Gerenciar o ciclo de vida dos containers, automatizando implantações, reiniciando instâncias falhas (self-healing) e fazendo o balanceamento de carga da rede.',
+                    'Traduzir comandos do sistema operacional Windows Server para Linux, garantindo que aplicações .NET antigas funcionem perfeitamente dentro do ambiente isolado.'
+                ],
+                explanation: 'O Kubernetes (K8s) orquestra operações em massa: escala automaticamente, substitui containers que param de responder e distribui o tráfego da rede.'
+            },
+            {
+                id: 15, category: 'virt', categoryLabel: 'Virtualização e Containers', correct: 4,
+                question: 'Um analista executou o comando "docker run -d -p 80:80 nginx" no seu terminal corporativo. O que exatamente esse comando instrui o daemon do Docker a fazer no servidor hospedeiro?',
+                options: [
+                    'Apagar qualquer imagem antiga do servidor web Nginx armazenada no host e reinstalar o sistema operacional base Debian focado especificamente na porta 80.',
+                    'Compilar o código fonte de uma aplicação web local, gerar uma imagem nova do Nginx e enviar essa imagem para o repositório público do Docker Hub online.',
+                    'Parar imediatamente todos os containers em execução e forçar o redirecionamento global do tráfego web da porta 8080 para a porta 80 de forma síncrona.',
+                    'Abrir o terminal interativo de um container Nginx existente, permitindo que o administrador altere o arquivo de configuração interno manualmente via prompt.',
+                    'Baixar a imagem do Nginx caso não exista localmente, iniciar o container em modo background (detached) e mapear a porta 80 do hospedeiro para a 80 do container.'
+                ],
+                explanation: 'A flag -d (detached) roda em background, e -p 80:80 faz o port-binding, publicando a porta do container na porta da máquina física hospedeira.'
+            },
+            {
+                id: 16, category: 'virt', categoryLabel: 'Virtualização e Containers', correct: 0,
+                question: 'Qual é a diferença fundamental de aplicação prática entre o uso da tecnologia de Containers Docker e a tecnologia de Containers LXC (Linux Containers)?',
+                options: [
+                    'O Docker foca no isolamento em nível de aplicação (um serviço por container), enquanto o LXC atua como um "System Container", emulando um ambiente de SO completo.',
+                    'O LXC é utilizado exclusivamente em sistemas operacionais Windows através do WSL, enquanto o Docker foi desenvolvido apenas para servidores de infraestrutura Apple macOS.',
+                    'O Docker consome todos os recursos do Hypervisor da máquina hospedeira de uma só vez, ao passo que o LXC é executado unicamente na memória virtual da placa de vídeo.',
+                    'O LXC exige a instalação obrigatória do orquestrador Kubernetes para funcionar, enquanto o Docker Swarm opera de forma independente de qualquer ferramenta de terceiro.',
+                    'Não há nenhuma distinção arquitetural ou de mercado; ambos os termos são marcas registradas diferentes que vendem exatamente a mesma ferramenta de emulação binária.'
+                ],
+                explanation: 'Docker é "Application Container" (empacota um app e suas libs). LXC é "System Container" (parece uma VM leve completa, com init system, syslog, ssh, etc).'
+            },
+            {
+                id: 17, category: 'virt', categoryLabel: 'Virtualização e Containers', correct: 1,
+                question: 'Ao estudar o Kubernetes, o termo "Pod" é constantemente mencionado. O que representa um Pod dentro da arquitetura deste orquestrador open source?',
+                options: [
+                    'É o servidor físico bare-metal que hospeda a central de controle do cluster, responsável exclusivamente por armazenar os logs de falhas do sistema em discos rápidos.',
+                    'É a menor e mais básica unidade de computação implantável no K8s, podendo conter um ou mais containers estreitamente acoplados que compartilham a mesma rede e volumes.',
+                    'É um script de automação de segurança que verifica as vulnerabilidades das imagens Docker antes que elas sejam carregadas no ambiente de produção da nuvem.',
+                    'É o sistema de balanceamento de carga externo que intercepta o tráfego HTTP dos clientes e roteia para os nós de trabalho baseados na geolocalização do acesso.',
+                    'É uma política de restrição de recursos que determina o consumo máximo absoluto de energia elétrica que um container específico pode usar no data center.'
+                ],
+                explanation: 'O Pod é a "célula" do Kubernetes. Ele empacota containers que precisam compartilhar a mesma interface de rede (IP) e armazenamento para funcionarem.'
+            },
+            {
+                id: 18, category: 'virt', categoryLabel: 'Virtualização e Containers', correct: 2,
+                question: 'Com relação aos comandos do CLI de virtualização, um administrador Proxmox utiliza a instrução "pct list" e "virsh list --all" no terminal. Qual é o resultado esperado dessas execuções combinadas?',
+                options: [
+                    'O primeiro comando formata todos os discos de dados alocados, enquanto o segundo reinstala as imagens de backup armazenadas na fita magnética do servidor corporativo.',
+                    'O comando pct migra aplicações para nuvens públicas automaticamente, ao passo que o virsh converte arquivos de configuração antigos para novos formatos otimizados.',
+                    'O "pct list" exibirá os containers de sistema LXC ativos no hospedeiro, e o "virsh list" apresentará as instâncias de Máquinas Virtuais (KVM) ligadas e desligadas.',
+                    'O primeiro irá reiniciar a interface de rede global do datacenter, e o segundo fará o download das bibliotecas de drivers de vídeo para as instâncias virtuais.',
+                    'Ambos os comandos são utilizados exclusivamente para alterar as permissões de gravação nas pastas compartilhadas pelos usuários do sistema de arquivos de rede (NFS).'
+                ],
+                explanation: 'No ecossistema Proxmox/Linux, o utilitário pct gerencia Proxmox Containers (LXC), e o virsh interage com o libvirt para gerenciar Máquinas Virtuais KVM.'
+            },
+            {
+                id: 19, category: 'virt', categoryLabel: 'Virtualização e Containers', correct: 3,
+                question: 'Por que o uso de Containers revolucionou a etapa de entrega de software, encerrando a famosa desculpa de desenvolvimento "na minha máquina funciona"?',
+                options: [
+                    'Porque o uso de containers elimina totalmente a necessidade de escrever códigos complexos em linguagens compiladas, automatizando o desenvolvimento de algoritmos de inteligência artificial.',
+                    'Devido à capacidade dos containers de traduzir o código fonte para múltiplos idiomas estrangeiros de forma autônoma, facilitando a distribuição do software em larga escala.',
+                    'Porque a imagem do container criptografa todo o banco de dados interno da aplicação, impedindo que desenvolvedores desautorizados alterem as configurações vitais do serviço.',
+                    'Porque a imagem empacota o código junto com exatas versões de bibliotecas e dependências. A mesma imagem testada no laptop do dev é rodada identicamente na nuvem de produção.',
+                    'Devido ao fato de que containers não aceitam atualizações de software após criados, garantindo que o programa fique permanentemente fixado em sua versão inicial de lançamento.'
+                ],
+                explanation: 'A padronização do ambiente (Dev = Homologação = Produção) elimina as inconsistências de bibliotecas e versões de sistema operacional entre máquinas diferentes.'
+            },
+            {
+                id: 20, category: 'virt', categoryLabel: 'Virtualização e Containers', correct: 4,
+                question: 'Qual é o papel da ferramenta "docker-compose" em um ambiente de desenvolvimento de infraestrutura de TI moderna?',
+                options: [
+                    'Ela atua como um hypervisor Tipo 1 especializado, substituindo sistemas robustos como o VMware para virtualizar dezenas de servidores Windows na nuvem da Microsoft.',
+                    'É um plugin exclusivo de navegador web utilizado para monitorar o tráfego HTTP criptografado entre diferentes orquestradores de rede configurados por balanceadores de carga.',
+                    'Serve para converter automaticamente uma aplicação desenhada em containers Docker para uma Máquina Virtual legada que será exportada para discos físicos corporativos.',
+                    'Funciona como um sistema de detecção de intrusos (IDS) embutido no Kernel Linux, alertando o Sysadmin sobre tentativas de invasão nas portas expostas da infraestrutura.',
+                    'Permite orquestrar e conectar múltiplos containers locais simultaneamente (ex: web, banco de dados, cache) a partir de um único arquivo declarativo em formato YAML.'
+                ],
+                explanation: 'O Docker Compose simplifica a subida de "pilhas" de serviços interconectados em uma máquina local usando infraestrutura como código (um arquivo YAML).'
+            },
+
+            // --- MÓDULO 3: SERVIDORES WEB (10 Questões) ---
+            {
+                id: 21, category: 'web', categoryLabel: 'Servidores Web', correct: 0,
+                question: 'O Nginx tornou-se dominante na infraestrutura de sites de altíssimo tráfego, superando sistemas mais antigos. Qual característica de design arquitetural justifica essa vantagem do Nginx em gerenciar milhares de requisições?',
+                options: [
+                    'A utilização de uma arquitetura orientada a eventos, assíncrona e não-bloqueante, que gerencia milhares de requisições simultâneas em um único worker loop sem exaurir a RAM.',
+                    'O fato de o Nginx compilar seus dados utilizando placas de rede dedicadas que bypassam completamente o processador da máquina, processando os pacotes direto no hardware.',
+                    'A obrigatoriedade de armazenar todo o conteúdo estático do site diretamente na memória cache do processador L1, diminuindo o acesso aos lentos discos de estado sólido (SSDs).',
+                    'A capacidade nativa do Nginx de comprimir todas as imagens de um site no formato ZIP antes de enviar ao cliente, reduzindo o custo financeiro da banda larga consumida.',
+                    'A implementação obrigatória de uma linguagem de script proprietária no lugar do PHP, que aumenta a segurança ao ignorar requisições provenientes de navegadores não autorizados.'
+                ],
+                explanation: 'A arquitetura "Event-Driven" evita criar uma thread/processo pesado de SO para cada usuário (como o Apache antigo fazia), resolvendo o famoso problema C10k.'
+            },
+            {
+                id: 22, category: 'web', categoryLabel: 'Servidores Web', correct: 1,
+                question: 'Em uma infraestrutura corporativa robusta, qual é o objetivo de posicionar um servidor Nginx atuando estritamente como "Proxy Reverso" à frente dos servidores de aplicação reais?',
+                options: [
+                    'Atuar como um firewall de camada de rede L3, bloqueando fisicamente o tráfego proveniente de endereços IP estrangeiros que não possuem cadastro prévio na empresa.',
+                    'Mascarar a infraestrutura de backend (ocultando IPs), realizar o balanceamento de carga (Load Balancing) do tráfego e centralizar os certificados de criptografia SSL/TLS.',
+                    'Substituir a necessidade de um banco de dados centralizado, armazenando os registros de login dos usuários de forma distribuída dentro dos arquivos de log do servidor Nginx.',
+                    'Impedir que os funcionários da empresa acessem sites não autorizados durante o expediente, filtrando as URLs através do modelo clássico de Forward Proxy institucional.',
+                    'Traduzir o código fonte das aplicações de forma síncrona, convertendo sistemas antigos feitos em .NET para a linguagem Python executável no ecossistema baseado em Linux.'
+                ],
+                explanation: 'O Proxy Reverso age como um escudo e distribuidor de tráfego. O cliente final acessa apenas o Proxy, sem nunca alcançar ou descobrir os servidores de backend.'
+            },
+            {
+                id: 23, category: 'web', categoryLabel: 'Servidores Web', correct: 2,
+                question: 'Sobre o Microsoft IIS (Internet Information Services), muito utilizado no mercado corporativo privado, é técnico e correto afirmar que:',
+                options: [
+                    'Trata-se de uma tecnologia obsoleta que foi substituída integralmente pelo Apache em servidores de e-mail institucionais devido à falta de atualizações de segurança na nuvem.',
+                    'É o servidor web corporativo exclusivo para o ecossistema Apple macOS, destacando-se na integração nativa com o banco de dados aberto PostgreSQL para a web.',
+                    'É a solução nativa do Windows Server, destacando-se por sua integração nativa ao ecossistema .NET, suporte robusto a Active Directory e uso de arquivos web.config.',
+                    'É gerenciado estritamente por linha de comando sem suporte a painéis gráficos, o que exige que os analistas programem em linguagem Shell Script de forma mandatória.',
+                    'Não suporta configurações de criptografia HTTPS nativamente, exigindo a instalação paralela de ferramentas de terceiros para proteger transações de e-commerce corporativo.'
+                ],
+                explanation: 'O IIS brilha em ambientes Windows, pois se amarra perfeitamente ao ecossistema Microsoft (.NET framework, autenticação AD e gerenciamento via PowerShell/GUI).'
+            },
+            {
+                id: 24, category: 'web', categoryLabel: 'Servidores Web', correct: 3,
+                question: 'Qual utilitário de linha de comando é utilizado por administradores Nginx como um "cinto de segurança" prático para verificar erros de sintaxe de digitação antes de reiniciar o daemon do servidor web?',
+                options: [
+                    'O comando "systemctl restart nginx --force", que força o carregamento de configurações ignorando qualquer erro gramatical encontrado no arquivo central de roteamento de rede.',
+                    'O comando "tail -f /var/log/nginx/error.log", que interrompe a execução do site imediatamente caso encontre alguma anomalia na estrutura do servidor proxy em produção.',
+                    'O comando "nginx -c clean", que apaga automaticamente o arquivo de configuração corrompido e restaura o backup padrão original disponibilizado pela documentação do software.',
+                    'O comando "nginx -t", que realiza a leitura e validação estrita do arquivo de configuração, alertando sobre blocos faltantes ou caracteres não-padrão sem impactar o tráfego ativo.',
+                    'O comando "ufw allow nginx", que verifica as chaves de segurança criptografadas do firewall garantindo que a aplicação esteja completamente invisível na web mundial pública.'
+                ],
+                explanation: 'A flag `-t` (test configuration) é obrigatória antes de um restart. Se houver um typo (ex: faltou ponto-e-vírgula), o comando avisa e o site não sai do ar.'
+            },
+            {
+                id: 25, category: 'web', categoryLabel: 'Servidores Web', correct: 4,
+                question: 'A tecnologia Apache dominou o mercado de "Hospedagem Compartilhada" (cPanel, Hostinger) por muitos anos. Qual recurso técnico descentralizado contribuiu substancialmente para esse cenário mercadológico?',
+                options: [
+                    'O uso restrito do sistema Windows Server em conjunto com o Apache, facilitando a criação de painéis gráficos amigáveis para gerenciar servidores privados em datacenters globais.',
+                    'A capacidade nativa do Apache de substituir o banco de dados MySQL de forma autônoma, gerando armazenamento infinito sem necessidade de configurações de discos paralelos.',
+                    'A funcionalidade embutida de orquestração de containers Docker Swarm, que alocava um servidor web exclusivo de forma elástica sempre que um cliente final fazia um upload.',
+                    'A política de criptografia de código aberto que permitia esconder o endereço de IP dos clientes no acesso remoto FTP, evitando multas contratuais no mercado europeu da web.',
+                    'A adoção do arquivo ".htaccess", que permite que um cliente de hospedagem sobrescreva rotas, acessos e regras locais em seu próprio diretório sem precisar de acesso root global.'
+                ],
+                explanation: 'O `.htaccess` revolucionou o shared hosting: cada cliente configurava suas próprias URLs amigáveis ou redirecionamentos na sua pastinha, sem afetar o servidor inteiro.'
+            },
+            {
+                id: 26, category: 'web', categoryLabel: 'Servidores Web', correct: 0,
+                question: 'Em um cenário de troubleshooting (diagnóstico) de um site que ficou fora do ar inesperadamente, qual comando o Sysadmin deve aplicar no terminal Linux para visualizar se o serviço do Apache falhou ou foi encerrado?',
+                options: [
+                    'O comando "systemctl status apache2", que consultará o gerenciador systemd e exibirá a árvore de processos atual, estado ativo/inativo e os últimos registros de erros.',
+                    'O comando "ip a apache2", que varrerá todas as portas da placa de rede local buscando pacotes HTTP perdidos e restaurará o tráfego da aplicação web para o navegador.',
+                    'O comando "chmod 777 /var/www", que concederá permissões absolutas de acesso a todos os arquivos de configuração, resolvendo eventuais falhas críticas de acesso ao banco.',
+                    'O comando "apt install --reinstall apache2", que fará o download instantâneo de uma nova versão do serviço da internet apagando completamente todos os dados do servidor local.',
+                    'O comando "virsh start apache", que inicializará novamente a máquina virtual isolada através do hypervisor raiz, conectando a interface gráfica administrativa do servidor.'
+                ],
+                explanation: 'O comando "status" do systemctl é o primeiro passo investigativo para checar se a "unit" do serviço está em loop de crash ou inativa, apresentando o erro exato.'
+            },
+            {
+                id: 27, category: 'web', categoryLabel: 'Servidores Web', correct: 1,
+                question: 'Para analisar e rastrear ataques de força bruta, tráfego suspeito ou apenas visualizar os IPs dos clientes que estão navegando no site Nginx em tempo real, qual o procedimento padrão na linha de comando Linux?',
+                options: [
+                    'Acessar o painel visual do Active Directory e verificar o relatório centralizado de políticas de segurança impostas pelo firewall da camada de enlace institucional local.',
+                    'Utilizar o comando utilitário "tail -f /var/log/nginx/access.log" para acompanhar o streaming do arquivo de log, visualizando dinamicamente as novas entradas HTTP recebidas.',
+                    'Executar a ferramenta de escaneamento de portas "nmap -sS localhost", que interceptará todo o tráfego TCP/IP da placa de rede e listará o tráfego gerado nos últimos dias.',
+                    'Abrir o arquivo de configuração principal "/etc/nginx/nginx.conf" utilizando um editor de textos e procurar pelas linhas marcadas com a flag de invasão por intrusos externos.',
+                    'Digitar o comando "docker ps -a" que audita automaticamente as variáveis de rede armazenadas no container, gerando uma planilha de diagnóstico do acesso web não autorizado.'
+                ],
+                explanation: 'O `tail -f` (follow) segue o arquivo e imprime na tela novas linhas conforme o servidor web recebe requisições (método HTTP, IP do cliente, código HTTP retornado).'
+            },
+            {
+                id: 28, category: 'web', categoryLabel: 'Servidores Web', correct: 2,
+                question: 'Em arquiteturas distribuídas, qual o propósito de utilizar o recurso de "Load Balancing" (Balanceamento de Carga) incorporado a Servidores Web como o Nginx ou soluções dedicadas na Nuvem?',
+                options: [
+                    'Otimizar o armazenamento de dados em HDDs e SSDs simultaneamente, gravando pedaços do banco de dados na memória RAM para garantir acesso instantâneo a relatórios longos.',
+                    'Compactar os arquivos de mídia (imagens e vídeos) consumidos pelos usuários finais para diminuir a conta mensal de transferência de dados junto ao provedor de nuvem empresarial.',
+                    'Distribuir o volume intenso de requisições de clientes uniformemente entre diversos servidores de backend operacionais, evitando sobrecarga em uma única máquina física ou virtual.',
+                    'Balancear as configurações de roteamento de protocolo de internet BGP, mascarando a latência de rede entre continentes diferentes durante acessos aos serviços remotos de API.',
+                    'Sincronizar a hora do sistema de servidores distribuídos globalmente com relógios atômicos espaciais para garantir a precisão milimétrica nas transações financeiras em bolsa.'
+                ],
+                explanation: 'O Balanceador atua como um "guarda de trânsito", pegando milhões de acessos HTTP na porta 80/443 e distribuindo round-robin (ou outros métodos) entre 5, 10 ou 100 servidores atrás dele.'
+            },
+            {
+                id: 29, category: 'web', categoryLabel: 'Servidores Web', correct: 3,
+                question: 'Qual é o fluxo clássico e sequencial de requisição e resposta quando um usuário digita um endereço no navegador em uma infraestrutura que implementa Proxy Reverso e múltiplos Backends?',
+                options: [
+                    'O Cliente aciona o DNS que aponta para o Banco de Dados; o Banco processa o HTML e o envia ao Proxy Reverso que por fim exibe a tela diretamente na interface do navegador.',
+                    'O Proxy Reverso analisa a requisição do Cliente offline, compila o código .NET internamente sem usar backend, grava um registro em log criptografado e retorna um arquivo seguro.',
+                    'O Servidor de Backend intercepta o pedido do Cliente, consulta o sistema SIEM corporativo e envia os dados brutos ao Proxy Reverso, que bloqueia o acesso via protocolo SSH.',
+                    'O Cliente dispara requisição HTTPS ao Proxy Reverso (que tem IP público); o Proxy descriptografa a conexão, direciona para um Servidor de Aplicação no backend, e retorna a resposta ao Cliente.',
+                    'O Cliente contata fisicamente o servidor de Aplicação; este transfere os dados da requisição para o Proxy Reverso que fará o balanceamento térmico das máquinas e exibirá a URL.'
+                ],
+                explanation: 'O Proxy Reverso é o único componente exposto à internet. Ele faz a terminação SSL, roteia o pacote puro (HTTP) para um container interno oculto, e repassa a página gerada de volta ao usuário.'
+            },
+            {
+                id: 30, category: 'web', categoryLabel: 'Servidores Web', correct: 4,
+                question: 'No processo de administração de servidores Nginx através da linha de comando Debian Linux, o que ocorre quando o analista envia a instrução "systemctl reload nginx"?',
+                options: [
+                    'O comando apaga permanentemente o cache armazenado em memória, forçando que imagens e vídeos do site sejam novamente baixados pelos usuários finais nas próximas visitas.',
+                    'O servidor Nginx realiza uma formatação de segurança em todos os diretórios web públicos expostos, restaurando a index.html original configurada no momento da instalação inicial.',
+                    'A instrução interrompe bruscamente o processo mestre, quebrando a conexão ativa de milhares de usuários online para garantir que os arquivos de atualização sejam instalados sem erros.',
+                    'O comando exporta as tabelas de configuração criptografadas para a nuvem da AWS, garantindo a redundância das rotas HTTP contra desastres cibernéticos de alta complexidade global.',
+                    'O Nginx recarrega suavemente os arquivos de configuração sem derrubar as conexões HTTP ativas dos usuários naquele momento (Graceful Reload), aplicando as mudanças a novas requisições.'
+                ],
+                explanation: 'Ao contrário de um "restart" abrupto, o "reload" envia um sinal ao processo mestre para ler a configuração de novo, fechar conexões antigas suavemente e abrir workers novos, garantindo Zero Downtime.'
+            },
+
+            // --- MÓDULO 4: HOSPEDAGEM NA NUVEM (10 Questões) ---
+            {
+                id: 31, category: 'cloud', categoryLabel: 'Nuvem e Modelos', correct: 0,
+                question: 'A principal vantagem financeira para uma empresa que abandona seu data center local empoeirado e migra toda sua carga de trabalho para provedores de Nuvem Pública é a transição contábil de recursos.',
+                options: [
+                    'A mudança estratégica do pesado modelo CAPEX (compra e depreciação de hardware imobilizado) para o modelo ágil OPEX (despesa operacional elástica baseada exclusivamente no uso).',
+                    'A conversão completa de todas as licenças de software corporativo pagas em licenças de uso comunitário gratuitas fornecidas gentilmente pelas gigantes multinacionais de tecnologia.',
+                    'O fim total da necessidade de contratar profissionais de infraestrutura de TI, uma vez que a nuvem pública administra, desenvolve e mantém todo o código das aplicações magicamente.',
+                    'A transição do OPEX (gastos mensais com refrigeração e segurança física de prédios) para o modelo CAPEX (pagamento fixo pelo uso antecipado de banda larga intercontinental de alta velocidade).',
+                    'A venda dos servidores antigos diretamente para os provedores como Microsoft e Amazon, que os reaproveitam e concedem descontos infinitos na fatura corporativa mensal de internet.'
+                ],
+                explanation: 'No modelo On-Premises a empresa enterra capital no chão comprando ferro (CAPEX). Na Nuvem, paga uma despesa mensal equivalente a uma conta de luz (OPEX) flexível.'
+            },
+            {
+                id: 32, category: 'cloud', categoryLabel: 'Nuvem e Modelos', correct: 1,
+                question: 'Na famosa pirâmide de camadas de serviços de Cloud Computing, quando uma empresa adota um modelo "SaaS" (Software as a Service), o que o usuário final ou o setor de negócio corporativo efetivamente recebe?',
+                options: [
+                    'O departamento de TI recebe o acesso restrito via terminal SSH a uma máquina virtual bruta onde será necessário configurar políticas locais de firewall e regras de administração.',
+                    'O usuário consome a aplicação web completamente finalizada, sem nenhuma gerência ou preocupação com atualizações, servidores ou banco de dados, estando tudo hospedado no provedor.',
+                    'O desenvolvedor recebe um painel para realizar o upload do seu código em Node.js ou Python, deixando a escalabilidade e o controle da infraestrutura para a plataforma de nuvem gerenciar.',
+                    'A empresa adquire a titularidade e o código-fonte de sistemas open source hospedados remotamente, responsabilizando-se judicialmente por invasões nos storages criptografados.',
+                    'A diretoria recebe discos rígidos físicos com cópias semanais de todas as transações, garantindo acesso seguro aos dados caso o provedor na nuvem decrete falência corporativa imprevista.'
+                ],
+                explanation: 'SaaS entrega a ponta final da cadeia. O usuário só entra com Login e Senha e usa o software (ex: Salesforce, Google Workspace, Canva), sem tocar na infraestrutura (IaaS) ou plataforma (PaaS).'
+            },
+            {
+                id: 33, category: 'cloud', categoryLabel: 'Nuvem e Modelos', correct: 2,
+                question: 'O recurso tecnológico que define o coração da Computação em Nuvem elástica, sendo a grande motivação técnica da migração corporativa de sites sujeitos a picos bruscos (como Black Friday), é a capacidade de:',
+                options: [
+                    'Adicionar camadas de segurança WAF e IDS automaticamente dentro de todos os arquivos de configuração do banco de dados, barrando injeções maliciosas enviadas via requisição HTML.',
+                    'Aumentar o limite de armazenamento temporário nos discos HDD corporativos para garantir que dados históricos sejam arquivados na internet profunda com segurança contra ataques piratas.',
+                    'Realizar o Auto-Scaling, ou seja, alocar dinamicamente novas instâncias de servidores virtuais conforme a CPU fica sobrecarregada pelo tráfego, e reduzi-las quando a demanda cai.',
+                    'Habilitar rotas de cabos físicos submarinos redundantes, interligando continentes distantes para diminuir a latência do ping na transmissão de dados criptografados sensíveis e complexos.',
+                    'Instalar ferramentas de monitoramento visual (SIEM) para cruzar automaticamente os relatórios mensais de despesas do RH corporativo com a fatura emitida pelo centro financeiro do provedor.'
+                ],
+                explanation: 'O Auto-Scaling permite que a empresa enfrente os picos de tráfego injetando clones das máquinas virtuais no Load Balancer dinamicamente, mantendo o site rápido e economizando na ociosidade.'
+            },
+            {
+                id: 34, category: 'cloud', categoryLabel: 'Nuvem e Modelos', correct: 3,
+                question: 'No nível mais fundamental da nuvem pública ─ a camada de infraestrutura IaaS (Infrastructure as a Service) ─ o serviço mais consumido é a Máquina Virtual. Qual a nomenclatura correta desse serviço nos gigantes AWS e GCP?',
+                options: [
+                    'Na infraestrutura Amazon AWS o serviço se chama Virtual Machines, e na nuvem Google GCP o recurso pioneiro atende pelo nome de Amazon S3 Object Storage.',
+                    'A arquitetura da plataforma AWS baseia seu núcleo de processamento no serviço Azure EC2, enquanto o Google Cloud delega essa função ao painel do Elastic Beanstalk Server.',
+                    'No modelo AWS o aluguel de processadores é feito na plataforma Google Compute Engine (GCE), e o sistema concorrente Google Cloud utiliza o nome Microsoft VM Instances.',
+                    'Na Amazon Web Services o pilar de servidores virtuais é chamado de EC2 (Elastic Compute Cloud), e no Google Cloud Platform o serviço correspondente é o Compute Engine (GCE).',
+                    'Ambos os fornecedores adotaram uma aliança padronizada pela fundação Linux e intitulam o serviço universal de provisionamento computacional de OpenShift Enterprise Containers.'
+                ],
+                explanation: 'Para instâncias computacionais puras (IaaS): AWS usa EC2, Azure usa Virtual Machines e GCP usa Compute Engine. São serviços equivalentes na guerra mercadológica da nuvem.'
+            },
+            {
+                id: 35, category: 'cloud', categoryLabel: 'Nuvem e Modelos', correct: 4,
+                question: 'Profissionais de Nuvem utilizam diariamente Interfaces de Linha de Comando (CLIs) para provisionar infraestrutura via scripts. Como um Analista se autentica nas plataformas AWS e Google Cloud através do terminal Bash?',
+                options: [
+                    'Para acessar a conta Amazon ele digita o comando "gcloud init login" e no sistema do Google ele aplica o comando "azure auth connect" gerando os certificados de acesso SSH nativo.',
+                    'O desenvolvedor necessita preencher formulários HTML via navegador web (GUI) na plataforma AWS, sendo tecnicamente proibida a autenticação programática via linha de comando aberto.',
+                    'Na AWS ele deve instalar a extensão gráfica de painel remoto e no GCP ele executa o utilitário binário "kubectl login", que mapeia a conta e orquestra a rede por tokens JWT secretos.',
+                    'Em ambos os ecossistemas, o profissional utiliza o protocolo padronizado "ssh-keygen auth", que importa automaticamente as senhas criptografadas baseadas na conta do Gmail ou Microsoft.',
+                    'Para inicializar e atrelar as chaves locais na Amazon AWS ele utiliza "aws configure"; e para validar a conta local de trabalho no Google Cloud, ele utiliza "gcloud auth login".'
+                ],
+                explanation: '`aws configure` solicita as Access Keys de integração na AWS. `gcloud auth login` abre o OAuth no navegador para vincular a conta na CLI do Google Cloud localmente.'
+            },
+            {
+                id: 36, category: 'cloud', categoryLabel: 'Nuvem e Modelos', correct: 0,
+                question: 'Uma equipe adota o modelo PaaS (Platform as a Service). Eles escolhem a solução AWS Elastic Beanstalk. Qual a rotina e a grande facilidade prática proporcionada aos desenvolvedores neste modelo em específico?',
+                options: [
+                    'Os desenvolvedores focam apenas em fazer o deploy do código-fonte e pacotes do software; a plataforma cuida automaticamente do Sistema Operacional, atualizações, rede e orquestração base.',
+                    'A equipe assume integralmente as obrigações da infraestrutura de baixo nível, instalando patches de segurança do Linux e configurando manualmente as tabelas de IP de roteamento do firewall local.',
+                    'O time de desenvolvimento não precisa escrever nem compilar o código fonte da aplicação web, pois a nuvem utiliza inteligência artificial generativa nativa para construir o site do zero.',
+                    'O serviço de nuvem obriga a formatação periódica dos discos da plataforma corporativa, cabendo aos programadores restaurar scripts de banco de dados diretamente de fitas LTO antigas do provedor.',
+                    'Eles ganham acesso ao painel de um software SaaS (como um CRM pronto), gerenciando usuários e equipes administrativas da corporação de forma integrada na interface web de RH.'
+                ],
+                explanation: 'A Camada PaaS tira a dor de cabeça do sistema operacional (Sysadmin/DevOps) do caminho. O Dev empacota o código (ex: .jar, node app), faz upload, e a "Plataforma" se encarrega de rodar.'
+            },
+            {
+                id: 37, category: 'cloud', categoryLabel: 'Nuvem e Modelos', correct: 1,
+                question: 'Ao arquitetar a segurança básica de um servidor EC2 na nuvem AWS, qual ferramenta atua como um "Firewall" simplificado atrelado à Máquina Virtual para liberar portas como a 80 (HTTP) e bloquear tráfegos indesejados?',
+                options: [
+                    'A tabela de endereçamento MAC do switch virtual AWS Shield, que impede falsificações estritas na rede corporativa L2 através do mapeamento de hardwares dedicados por satélite.',
+                    'O Security Group (Grupo de Segurança), que funciona como regras de firewall virtual para controlar o tráfego de rede de entrada (Ingress) e de saída (Egress) da instância em nuvem.',
+                    'O serviço unificado de Identidade Amazon IAM, responsável por liberar o acesso remoto aos dados sigilosos e gerenciar fisicamente o tráfego de e-mails entre aplicações na conta.',
+                    'A implementação avançada nativa do orquestrador de pods Docker Kubernetes, que filtra pacotes fragmentados TCP bloqueando robôs maliciosos na camada fundamental do provedor global.',
+                    'A configuração visual exclusiva do painel de monitoramento Splunk SIEM, que redireciona tráfego duvidoso para redes secundárias do data center aplicando detecção heurística preditiva.'
+                ],
+                explanation: 'Os "Security Groups" são as regras de firewall de camada de rede de nuvem atreladas à instância EC2, controlando exatamente quais portas podem enviar e receber tráfego.'
+            },
+            {
+                id: 38, category: 'cloud', categoryLabel: 'Nuvem e Modelos', correct: 2,
+                question: 'Após instanciar um ambiente e aplicar as configurações de rede, um DevOps quer testar no terminal se uma VM da Nuvem EC2 possui a porta de servidor web devidamente exposta. O que o comando "curl -I IP_DA_VM" faz?',
+                options: [
+                    'Desliga temporariamente o servidor web executado na máquina virtual de nuvem e reinicia o daemon remoto de sistema operativo utilizando as senhas master de administração alocadas.',
+                    'Configura o firewall interno da máquina virtual baseando-se em listas abertas, bloqueando todas as conexões TCP/IP externas que busquem acesso forçado a diretórios sensíveis confidenciais.',
+                    'Faz uma requisição básica no método HEAD, retornando o cabeçalho HTTP de resposta da máquina virtual sem baixar o HTML, o que prova tecnicamente que a porta web e o servidor web estão online.',
+                    'Obriga a infraestrutura de rede da nuvem corporativa a alocar mais memória RAM dinâmica para a instância baseada no número de pacotes ICMP corrompidos durante os últimos pings recebidos.',
+                    'Envia a chave criptografada pública do usuário conectando automaticamente a sessão segura de terminal via protocolo interativo SSH para controle total e auditoria corporativa remota da nuvem.'
+                ],
+                explanation: 'O utilitário CLI `curl -I` captura apenas os HTTP Headers. É excelente para auditar rapidamente a conectividade de redes, qual o servidor web (Server: nginx), os cookies e o status code (ex: 200 OK).'
+            },
+            {
+                id: 39, category: 'cloud', categoryLabel: 'Nuvem e Modelos', correct: 3,
+                question: 'Sobre provedores líderes do quadrante mágico de Cloud Computing para infraestrutura pública (IaaS / PaaS), indique a alternativa que lista estritamente e exclusivamente os "Três Gigantes" (Big 3) que dominam o mercado global.',
+                options: [
+                    'Apple iCloud Infrastructure, Facebook Data Platform Services e Twitter Cloud Storage, focados na hospedagem massiva de microsserviços open source integrados a smartphones nativos do Vale do Silício.',
+                    'DigitalOcean Droplet Servers, Heroku Platform Container System e HostGator Shared Hosting Provider, baseados unicamente em tecnologia de sites baratos para empreendedores iniciantes de e-commerce global.',
+                    'Cisco Meraki Cloud Enterprise, Dell EMC Virtualization Core Data Storage e HP Enterprise Helion Servers, que atuam no mercado local fechado de compra de caixas de servidores de rede on-premises híbridos.',
+                    'Amazon Web Services (AWS), Microsoft Azure (Azure) e Google Cloud Platform (GCP), corporações pioneiras e líderes mundiais que detém a imensa maioria do market share global de datacenters escaláveis.',
+                    'VMware vSphere Enterprise Suite, Proxmox Virtual Environment Datacenter Open Cluster e Oracle VirtualBox Hosted Systems, voltados estritamente para simulação de máquinas virtuais internas off-grid remotas.'
+                ],
+                explanation: 'Esses 3 trilionários titãs da tecnologia (Amazon, Microsoft e Alphabet/Google) criaram, consolidaram e monopolizam grande parte dos serviços, inovação e escala massiva na nuvem pública moderna.'
+            },
+            {
+                id: 40, category: 'cloud', categoryLabel: 'Nuvem e Modelos', correct: 4,
+                question: 'No processo de auditoria de consumo em nuvem, um Administrador digita "aws ec2 describe-instances" em seu terminal de gerência (CLI) devidamente autenticado. Qual o resultado principal processado por esse comando na Amazon?',
+                options: [
+                    'Ele encerra imediatamente as conexões TCP ativas em todos os servidores do Data Center da empresa na internet bloqueando as conexões dos robôs de busca mundiais baseados no IP reverso associado.',
+                    'Este comando exclui de maneira irreversível as políticas de autenticação multifator do banco de dados na nuvem corporativa gerando relatórios de alerta em tempo real de vulnerabilidades no painel web interno.',
+                    'Inicia as ferramentas locais do sistema e força atualizações forçadas (upgrade do kernel e pacotes nativos) dentro de todos os containers orquestrados no servidor Debian sem aviso antecipado à matriz.',
+                    'Limpa o cache obsoleto gerado pelas cópias distribuídas de objetos armazenados localmente no storage S3 de arquivos não processados reduzindo o tempo de processamento contábil dos discos SSD de estado sólido.',
+                    'Chama as APIs da Amazon Web Services para listar e retornar detalhes técnicos robustos em formato de metadados das instâncias de Máquinas Virtuais ligadas, desligadas ou criadas na sua conta corporativa.'
+                ],
+                explanation: 'A diretriz `describe-instances` atua como um inventário detalhado via CLI para listar infraestrutura. A nuvem não passa de um enorme painel de APIs respondendo a esses comandos de orquestração.'
+            },
+
+            // --- MÓDULO 5: SEGURANÇA, IAM E LOGS (10 Questões) ---
+            {
+                id: 41, category: 'sec', categoryLabel: 'Segurança & WAF', correct: 0,
+                question: 'Durante um pentest autorizado, um auditor descobre que a aplicação corporativa não sanitizou as variáveis no banco de dados e enviou um payload clássico de injeção de código SQL através da porta 443 liberada. Qual proteção em profundidade faltou nessa arquitetura?',
+                options: [
+                    'A implantação em linha de um WAF (Web Application Firewall) na Camada 7, responsável por dissecar e barrar ataques de injeção disfarçados dentro do cabeçalho da própria requisição HTTP autorizada.',
+                    'Um sistema de criptografia pesada nos discos SSD através do software utilitário nativo BitLocker, que previne qualquer leitura paralela de dados através da captura interceptada na rede de backbone externa aberta.',
+                    'A integração forçada no servidor físico de um Proxy Forward L2 focado na análise do DNS remoto do provedor de banda larga que roteia o tráfego gerado pela máquina infectada do atacante em tempo real.',
+                    'A delegação obrigatória das regras rígidas de segurança local atreladas ao servidor de políticas de diretório Active Directory corporativo bloqueando acessos a perfis sem privilégios de alto nível executivo.',
+                    'Um sistema básico de Firewall tradicional de pacote L3 atrelado às chaves configuradas na interface da porta TCP/IP interna para barrar acessos não autenticados a bancos MySQL na internet distribuída.'
+                ],
+                explanation: 'A Injeção SQL passa impunemente pelos firewalls normais de rede (pois viaja dentro do canal HTTPS liberado da porta 443). O WAF resolve isso inspecionando o payload (camada de aplicação).'
+            },
+            {
+                id: 42, category: 'sec', categoryLabel: 'IDS vs IPS', correct: 1,
+                question: 'Na defesa do perímetro de rede corporativa, é crucial diferenciar as funções de sistemas fundamentais de segurança de monitoramento: o IDS (Intrusion Detection System) e o IPS (Intrusion Prevention System). Indique a diferença vital:',
+                options: [
+                    'O IDS bloqueia o tráfego ativamente cortando cabos virtuais infectados, ao passo que o IPS atua no armazenamento estruturado de cópias seguras e arquivos críticos (backups distribuídos).',
+                    'O IDS é "Passivo": atua escutando o tráfego e emitindo alertas de invasão. Já o IPS é "Ativo": fica diretamente no caminho da rede interceptando e derrubando pacotes ou conexões nocivas instantaneamente.',
+                    'A funcionalidade IDS se resume à gerência criptográfica de e-mails seguros de diretores na nuvem, e o IPS lida com conexões de redes físicas de baixa voltagem baseadas no tráfego ethernet estruturado.',
+                    'O IDS atua gerenciando permissões nas contas e senhas do Windows Active Directory nativo, enquanto o IPS controla acessos de visitantes na porta local sem permissões privilegiadas conectadas ao WiFi guest.',
+                    'Não existe distinção de tecnologia ou de fluxo de rede aplicada. O mercado emprega nomes diferentes apenas para taxar as atualizações da licença open source corporativa de software em nuvens fechadas.'
+                ],
+                explanation: 'O IDS atua como uma câmera de vigilância (alarma, mas não atira). O IPS atua como um guarda-costas (entra na frente do pacote TCP e descarta as conexões nocivas dinamicamente).'
+            },
+            {
+                id: 43, category: 'sec', categoryLabel: 'IAM & Identidades', correct: 2,
+                question: 'Se uma empresa tem 5.000 computadores Windows e 200 servidores Linux, qual o grave risco operacional de segurança e gestão na utilização do conceito isolado de "Usuários Locais" cadastrados máquina por máquina nestes equipamentos?',
+                options: [
+                    'Os administradores são proibidos de auditar permissões individuais localmente e o sistema reinicia compulsoriamente os servidores após bloqueio de sessões nativas nos provedores da nuvem atrelados.',
+                    'Isso requer compra de licenças avulsas e custosas para os pacotes de instalação do kernel focado no banco de dados que validará as senhas locais armazenadas de forma criptografada nos discos removíveis.',
+                    'O enorme overhead gerencial da fragmentação. Caso um funcionário que tinha dezenas de logins perca o cargo, um administrador pode esquecer de remover o acesso dele a uma máquina e causar uma grave brecha ativa.',
+                    'Isso ativa vulnerabilidades inerentes ao próprio código binário do sistema, pois arquivos de acesso em desktops se fundem com sistemas na rede remota bloqueando o funcionamento adequado do tráfego web seguro.',
+                    'Os usuários e permissões locais armazenados tornam os discos tão fragmentados com hashes em cascata que a memória do servidor crasha diariamente devido à exaustão de processamento das CPUs de acesso lento.'
+                ],
+                explanation: 'É o clássico erro do início da TI Corporativa. Múltiplas identidades em silos independentes impossibilitam o provisionamento e o corte seguro de senhas em redes de médio/grande porte de maneira ágil.'
+            },
+            {
+                id: 44, category: 'sec', categoryLabel: 'IAM & Identidades', correct: 3,
+                question: 'Qual a solução ideal que implementa a Governança centralizada de contas e permite com que a TI gerencie a autenticação e permissões de toda a frota corporativa (5000 PCs e Servidores) em uma única base de dados relacional e segura?',
+                options: [
+                    'Instalar fisicamente um roteador central com balanceamento L3/L4 dedicado às instâncias Docker nativas orquestrando e roteando chaves baseadas em endereço MAC ocultado do firewall externo em operação.',
+                    'Implementar backups sincronizados diários baseados no ecossistema Kubernetes, aplicando restrições de disco SSD na política das unidades organizacionais distribuídas geograficamente em containers orquestrados.',
+                    'Obrigar o uso restrito de proxies transparentes do tipo Reverse Proxy nativos alocados no topo de cada filial roteada em conjunto à nuvem da AWS bloqueando senhas complexas e longas no armazenamento de cache.',
+                    'Adotar um robusto Sistema de Diretório Centralizado Integrado corporativo como o Microsoft Active Directory (AD DS) ou o OpenLDAP em base livre validando todos os logins via autenticação única de domínio ativo.',
+                    'Adotar políticas rigorosas proibindo senhas e baseando o acesso a informações nas nuvens públicas baseadas essencialmente em VPNs peer-to-peer de protocolo tunelado e redes anônimas do escopo deep-web remoto.'
+                ],
+                explanation: 'O AD (no Windows) ou LDAP resolve o problema de fragmentação do IAM ao exigir que toda e qualquer verificação de credencial passe e seja aprovada pela "central de comando" ou pelo "DC" de rede corporativo.'
+            },
+            {
+                id: 45, category: 'sec', categoryLabel: 'Logs & Syslog', correct: 4,
+                question: 'Dentro de uma infraestrutura Linux, todos os logs (registros) vitais do kernel, erros de aplicação, falhas de disco e, principalmente, as tentativas falhas de logar no servidor de rede ficam guardados por padrão. Qual o comando para lê-los dinamicamente?',
+                options: [
+                    'O comando iterativo CLI "$ ifconfig eth0 view" que lê nativamente todo o tráfego gerado em nível de placa de rede monitorando logs puros formatados baseados na hora unificada global do sistema base.',
+                    'O utilitário clássico de compilação "$ systemctl allow sys logs" atrelado à flag avançada de verificação bloqueando instâncias do sistema de eventos do Windows integrado a servidores de rede corporativa Linux.',
+                    'A execução da instrução restrita do superusuário "$ chmod logs /etc/bin" executando no background serviços cruciais escondendo registros confidenciais provenientes de erros ou anomalias sistêmicas da placa-mãe.',
+                    'A chamada de monitoramento passiva "apt install firewall --logs", baixando e configurando um novo repositório isolado gerando os relatórios essenciais de rede restritos do roteamento L3 focado na segurança.',
+                    'O comando "tail -f /var/log/syslog" (ou "journalctl" em sistemas recentes), que escuta em tempo real o despejo incessante de logs processados e centralizados pelo próprio daemon nativo do Sistema Operacional base.'
+                ],
+                explanation: 'No padrão FHS do Linux, a pasta /var armazena dados variáveis. E /var/log/syslog atua como o esgoto principal das auditorias e logs do próprio servidor. É indispensável para o troubleshooting.'
+            },
+            {
+                id: 46, category: 'sec', categoryLabel: 'Auditoria & SIEM', correct: 0,
+                question: 'O analista SOC que defende uma corporação gigantesca recebe simultaneamente milhões de linhas de log provenientes de mil firewalls, proxies e bancos de dados distintos. Qual o papel da ferramenta "SIEM" nessa operação complexa e massiva?',
+                options: [
+                    'Ela agrega os eventos esparsos, correlaciona horários e usuários de forma inteligente com IA e regras de segurança, emitindo um alerta único se comportamentos complexos e perigosos formarem um ataque ativo coordenado.',
+                    'Ela restringe nativamente conexões de banco de dados MySQL de acesso público barrando vulnerabilidades ativas que vazam relatórios de transações confidenciais diretamente no desktop do analista em rede L2 de baixa prioridade.',
+                    'Trabalha focado exclusivamente como um utilitário antivírus nos desktops corporativos desvendando códigos de programas ransomware em processos da memória virtual e evitando roubo local atrelado aos discos de hardware alocados.',
+                    'O SIEM recruta pods no Kubernetes em instâncias elásticas temporárias substituindo firewalls defasados com redes baseadas na computação em nuvem automatizando atualizações vitais de Kernel do linux restrito em datacenters globais.',
+                    'Ferramenta exclusiva foca em controlar senhas criptografadas nos dispositivos via redes anônimas roteadas garantindo logs invisíveis e inaudíveis mascarando o acesso de auditores cibernéticos às aplicações legadas nas nuvens AWS ativas.'
+                ],
+                explanation: 'Sem um SIEM (Security Information and Event Management), o analista ficaria cego em meio a bilhões de linhas em formato "txt". O SIEM enxerga o panorama geral do ataque.'
+            },
+            {
+                id: 47, category: 'sec', categoryLabel: 'Segurança & Proteções', correct: 1,
+                question: 'No combate aos ataques rudimentares baseados em "Força Bruta" e varreduras sistêmicas de dicionário focados nos serviços de acesso remoto da infraestrutura (como o protocolo SSH ou RDP), qual o contra-golpe sistêmico e automatizado que o Servidor aplica localmente?',
+                options: [
+                    'Ele reescreve imediatamente as senhas originais do sistema substituindo pelos tokens aleatórios injetados via redes mesh P2P intercontinentais e envia relatórios via correio interno ao analista DevOps alocado na matriz em Brasília.',
+                    'Ele utiliza scripts de segurança baseados no log (como o Fail2Ban), que analisam o número de erros de senha num curto período; se exceder, injeta regras diretas no Firewall banindo fisicamente o IP invasor de conectar novamente no host.',
+                    'O servidor Linux aciona processos complexos nativos que reduzem a conectividade web alocando limites diários rigorosos diminuindo abruptamente a velocidade da banda larga isolando o datacenter global em nuvem bloqueando varreduras intrusivas lentas na web livre.',
+                    'Ele realiza balanceamento do tráfego do ataque transferindo os dados perigosos remotamente para ambientes isolados sandbox dentro de containers virtuais rodando cópias legadas limitando o comprometimento massivo dos processos interligados e distribuídos nas filiais do exterior.',
+                    'Os administradores criam rotas manuais estáticas redirecionando conexões baseadas nas portas TCP comprometidas com scripts bash convertidos formatando partições comprometidas e realocando permissões L7 nativas de autenticação ativas integradas a proxys reversos complexos do datacenter remoto seguro.'
+                ],
+                explanation: 'O Fail2Ban é genial em sua simplicidade: lê o log em /var/log/syslog, vê 10 erros seguidos do mesmo IP, e joga um BAN temporário usando o iptables (Firewall) da máquina.'
+            },
+            {
+                id: 48, category: 'sec', categoryLabel: 'Segurança', correct: 2,
+                question: 'A configuração incorreta de um ambiente Linux resulta em permissões de diretórios baseados na modelagem chmod clássica configuradas exageradamente como "777". O que isso causa em arquivos confidenciais hospedados nesse caminho local do servidor?',
+                options: [
+                    'Atribui bloqueios rígidos restringindo os pacotes que passam pelas portas da infraestrutura impedindo a criação remota baseada na administração SSH através do controle centralizado nativo integrado ao ambiente LDAP configurado nas empresas e provedores alocados mundialmente.',
+                    'Dá total imunidade a aplicações web isolando processos restritos da rede que executam atualizações nativas configurando logs temporários formatados no formato estruturado limitando conexões ao banco SQL baseados na estrutura robusta de roteadores L3 implementados em infraestruturas virtuais complexas seguras.',
+                    'Cria a pior vulnerabilidade possível na estrutura FHS, uma vez que qualquer usuário comum logado remotamente na máquina e até serviços de aplicações comprometidas possuirão plenos poderes de modificar, gravar e executar códigos ou apagar silenciosamente esses dados estruturais.',
+                    'Instala mecanismos automáticos de verificação formatando relatórios completos e dinâmicos baseados no volume processado pelo disco HDD criando gargalos que afetam conexões lentas limitadas pelo provedor criptografando requisições executadas globalmente e remotamente ativas e controladas e executadas de maneira restrita aos admins de TI base.',
+                    'Garante permissões de segurança blindadas restringindo dados que apenas acessos gerados nas camadas administrativas mais profundas e virtuais tenham liberdade baseada nas redes protegidas roteadas pelas máscaras ocultas configuradas dinamicamente conectadas fisicamente restritas na placa controladora de acessos sistêmicos corporativos na nuvem global unificada distribuída escalonada em containers virtuais.'
+                ],
+                explanation: 'No mundo unix rwx: (7) Dono faz tudo. (7) Grupo faz tudo. (7) Outros, qualquer um, invasor ou serviço bugado, faz tudo. É o pesadelo da governança de dados na segurança.'
+            },
+            {
+                id: 49, category: 'sec', categoryLabel: 'Testes de Segurança', correct: 3,
+                question: 'O Administrador Linux, após provisionar uma Máquina Virtual Web corporativa conectada internet global, usa a ferramenta de terminal NMAP digitando o clássico comando de scan "$ sudo nmap -sS -O localhost". O que ele de fato objetiva identificar na infraestrutura?',
+                options: [
+                    'Ele quer isolar falhas de comunicação local executando testes limitados com pacotes gigantes enviados a todos os roteadores configurando métricas formatadas focadas em avaliar se discos locais de logs preenchem tabelas de registros de IP mascaradas ou lentas ativas nas nuvens conectadas globalmente roteadas entre datacenters corporativos fisicamente isolados em diferentes continentes.',
+                    'Procura avaliar a versão completa instalada na imagem Docker alocando serviços temporários executados baseados nas linguagens legadas criando diagnósticos automatizados estruturais que analisam portas limitando processos em background executados e escondidos da placa mãe que corrompem tabelas complexas do Active Directory conectados globalmente pela ferramenta nativa integrada.',
+                    'Tenta invadir instâncias AWS remotas executando rotinas que simulam balanceadores lentos conectados nativamente mapeando acessos de usuários externos baseados em conexões via provedores virtuais orquestrados criando redes escaláveis seguras protegidas via certificados configuradas nos proxies reversos executados de forma oculta nos bancos de logs do sysadmin focado em gerência interativa global.',
+                    'Ele age como o atacante aplicando auditoria interna no servidor em produção. O scan revelará imediatamente um mapa completo constando as exatas "Portas Lógicas da Camada 4" que ficaram expostas ou abertas por erro e tentará chutar o SO rodando por trás baseando-se em respostas da pilha de rede base.',
+                    'Configura balanceamento restrito em clusters simulando varreduras nativas formatando pastas compartilhadas analisadas executando processos de roteamento baseados em políticas de proxy configuradas nas redes internas que interconectam e dividem domínios criptografados em nuvens alocadas criando serviços elásticos executados em instâncias web com alto processamento focado local.'
+                ],
+                explanation: 'O nmap (-sS Stealth Scan) é a ferramenta de canivete suíço para mapear rede. Você não pode defender portas se você não audita se não há portas secretas esquecidas e abertas.'
+            },
+            {
+                id: 50, category: 'sec', categoryLabel: 'Segurança e Redes', correct: 4,
+                question: 'Qual é a política fundamental de filtragem recomendada globalmente ("Default Deny Policy") que deve nortear o fechamento de um Firewall (UFW ou iptables) de Servidor que está exposto integralmente e recebendo conexões diretas na nuvem cibernética mundial aberta?',
+                options: [
+                    'As rotas limitam restritamente regras em IPs executados nativamente criando exceções criptografadas configuradas formatadas restritas nos dispositivos roteados em proxies baseando o servidor conectado virtualmente mapeado bloqueando scripts focados limitados formatando serviços lentos ativos hospedados localmente estruturados nos containers simulados distribuídos em clusters ocultados global e ativamente conectados.',
+                    'Regras liberam portas limitadas abertas executadas em background criando redes restritas formatadas limitando conexões em provedores simulando portas mapeadas conectadas nos firewalls aplicados no SO base limitando processos orquestrados em instâncias elásticas alocadas formatando balanceadores restritos conectados simulando portas estruturadas nativas nas nuvens públicas aplicadas virtualmente hospedadas em redes distribuídas orquestradas base local focado.',
+                    'Permissões limitam conexões aplicadas executando scripts que focam regras criadas formatadas configuradas ativas em instâncias hospedadas isolando portas abertas mapeadas estruturadas local conectadas no provedor isolando containers formatando sistemas lentos limitados restritos nas nuvens elásticas simulando acessos criados configurados em balanceadores aplicados nativamente em redes distribuídas orquestradas com IPs focados e restritamente criptografados ativos conectados virtualmente em clusters locais fechados limitados estrutural focado base.',
+                    'Configurações liberam acessos executados mapeando redes alocadas nativamente estruturadas limitando portas abertas formatando processos em firewalls conectados configurando regras restritas simulando provedores conectados executando acessos locais hospedados limitando instâncias focadas isoladas distribuindo IPs nativamente configurados em clusters estruturados limitando redes aplicadas nas nuvens orquestradas conectadas virtual e ativamente executadas formatadas restritamente fechadas base focado e distribuído.',
+                    'Negar e fechar proativamente e de forma generalizada 100% de todo tráfego de rede e acesso que chega ao sistema, e apenas liberar cirurgicamente as portas mínimas requeridas e vitais para o funcionamento do negócio e gerência de TI, como HTTPS 443, HTTP 80 e SSH 22.'
+                ],
+                explanation: 'É suicídio cibernético tentar advinhar quais as milhares de portas o atacante tentará usar. A Defesa em Profundidade determina que a porta da frente é blindada e só entra o autorizado explícito.'
+            }
+        ];
+
+        // FLASHCARDS DATA
+        const flashcardsData = [
+            // --- MÓDULO 1: SISTEMAS OPERACIONAIS (10 Cards) ---
+            { category: 'Sistemas Operacionais', question: 'Qual a diferença básica entre Linux e BSD?', answer: 'O Linux é apenas o Kernel (o SO é montado por distribuições com pacotes ao redor). O BSD (FreeBSD/OpenBSD) é desenvolvido como um sistema completo integrado (Kernel + Ferramentas do SO).' },
+            { category: 'Administração Linux', question: 'O que o comando "sudo" faz?', answer: 'Eleva temporariamente os privilégios do usuário comum para superusuário (root), evitando os riscos de trabalhar logado como root o tempo todo.' },
+            { category: 'Hierarquia de Arquivos', question: 'No padrão FHS do Linux, para que serve o diretório /etc?', answer: 'Armazena os arquivos de configuração global do sistema e dos serviços (ex: /etc/nginx/nginx.conf, /etc/hosts).' },
+            { category: 'Permissões (rwx)', question: 'O que significa um arquivo com a permissão 770?', answer: 'Dono (7 = rwx) e Grupo (7 = rwx) têm acesso total (ler, escrever, executar). Outros usuários (0) não têm nenhum acesso.' },
+            { category: 'Gerenciamento de Pacotes', question: 'Para que serve o comando "apt" no Ubuntu/Debian?', answer: 'Instalar, atualizar e remover softwares resolvendo dependências automaticamente a partir de repositórios centrais.' },
+            { category: 'Serviços e Systemd', question: 'Como garantir que o Apache inicie com o boot da máquina?', answer: 'Utilizando o comando "sudo systemctl enable apache2". Isso cria o link simbólico na inicialização.' },
+            { category: 'Monitoramento de Recursos', question: 'Qual o uso prático dos comandos "top" ou "htop"?', answer: 'Monitorar, em tempo real, o consumo de CPU e Memória RAM de todos os processos ativos no servidor Linux.' },
+            { category: 'Windows Server', question: 'Qual a função da GPO (Group Policy Object)?', answer: 'Recurso do Active Directory para aplicar restrições de software, senhas e configurações em milhares de PCs simultaneamente.' },
+            { category: 'Windows Server vs Linux', question: 'Onde o Windows Server domina e onde o Linux domina?', answer: 'O Windows Server lidera a Intranet (AD, rede interna, arquivos e estações). O Linux domina a Internet (Nuvem, Web e microsserviços).' },
+            { category: 'Arquitetura Híbrida', question: 'O que é o WSL (Windows Subsystem for Linux)?', answer: 'Tecnologia que roda um Kernel Linux otimizado (via Hyper-V) dentro do Windows, sem o peso isolado de uma VM tradicional de desktop.' },
+            
+            // --- MÓDULO 2: VIRTUALIZAÇÃO & CONTAINERS (10 Cards) ---
+            { category: 'Virtualização', question: 'O que é um Hypervisor Tipo 1 (Bare Metal)?', answer: 'É um software de virtualização instalado diretamente sobre o hardware físico da máquina, sem a necessidade de um SO hospedeiro prévio (Ex: VMware ESXi, Proxmox VE, KVM).' },
+            { category: 'Containers vs VMs', question: 'Por que Containers são mais leves que VMs?', answer: 'Containers compartilham o mesmo Kernel (motor) do SO hospedeiro via namespaces. VMs emulam o hardware e carregam um SO completo cada uma.' },
+            { category: 'Docker', question: 'Para que serve o utilitário Docker?', answer: 'Ferramenta que empacota aplicações e suas dependências exatas em "Imagens", garantindo que rodem de forma idêntica em qualquer ambiente (Application Container).' },
+            { category: 'Linux Containers (LXC)', question: 'Qual a diferença entre Docker e LXC?', answer: 'Docker isola apenas um serviço/app. LXC isola um sistema operacional virtual leve que se parece e se comporta como uma VM rápida (System Container).' },
+            { category: 'Orquestração', question: 'O que é o Kubernetes (K8s)?', answer: 'O maestro dos containers na nuvem. Ele orquestra milhares de containers: faz auto-scaling, balanceia o tráfego e recria containers com erro (self-healing).' },
+            { category: 'Arquitetura K8s', question: 'O que é um Pod no Kubernetes?', answer: 'É a menor unidade gerenciável do K8s, agrupando um ou mais containers fortemente acoplados que compartilham mesma rede (IP) e volumes.' },
+            { category: 'Proxmox', question: 'Qual o trunfo da plataforma Proxmox VE?', answer: 'Um cluster open-source híbrido, integrando em um só painel web o robusto KVM para VMs e o ágil LXC para Containers, focando na performance nativa.' },
+            { category: 'CLI de Containers', question: 'O que faz o comando "docker run -d -p 80:80 nginx"?', answer: 'Inicia o container do nginx em background (detached) e mapeia a porta 80 da máquina física real para a porta 80 do container isolado.' },
+            { category: 'Docker Compose', question: 'Qual a vantagem do Docker Compose?', answer: 'Ele orquestra a criação simultânea de múltiplos containers locais (ex: subir o App + Banco de Dados + Redis juntos) lendo regras fáceis de um arquivo yaml.' },
+            { category: 'Migração Moderna', question: 'O fim da desculpa "Na minha máquina roda".', answer: 'Com imagens containerizadas imutáveis, desenvolvedores entregam a infraestrutura idêntica ao código de produção, eliminando conflito de dependências.' },
+
+            // --- MÓDULO 3: SERVIDORES WEB (10 Cards) ---
+            { category: 'Servidores Web', question: 'Por que o Nginx consome menos RAM que o Apache?', answer: 'O Nginx utiliza arquitetura orientada a eventos (assíncrona e não-bloqueante), tratando milhares de conexões em um único worker. O Apache aloca threads/processos por conexão.' },
+            { category: 'Proxy Reverso', question: 'Quais as principais vantagens de usar um Proxy Reverso?', answer: 'Esconder a infraestrutura e IP real dos servidores de aplicação, realizar balanceamento de carga (Load Balancer) e centralizar a terminação dos certificados SSL/TLS.' },
+            { category: 'Microsoft IIS', question: 'Qual a principal força do IIS no mercado?', answer: 'Sua formidável integração nativa corporativa no Windows Server, hospedando e executando aplicações críticas baseadas na robustez do framework .NET.' },
+            { category: 'Apache clássico', question: 'Para que serve o arquivo descentralizado .htaccess?', answer: 'Popular no Apache, permite reescrever rotas e criar regras de diretório para cada aplicação local isolada sem afetar a máquina física globalmente e sem requerer acessos admin (root).' },
+            { category: 'Boas práticas', question: 'O que a flag "nginx -t" permite fazer?', answer: 'O "cinto de segurança". O sysadmin testa a sanidade lógica (erros de digitação e typos de chaves do teclado) no arquivo de configuração do proxy web antes do reload catastrófico final.' },
+            { category: 'Diagnóstico Web', question: 'O que esperar em uma saída do comando "systemctl status nginx"?', answer: 'Deve exibir o estado "active (running)" em verde para constatar normalidade, ou exibir mensagens de falha, timeout e PID de processos zumbis que quebraram o roteamento TCP/IP.' },
+            { category: 'Monitoramento Contínuo', question: 'O uso diário prático de "tail -f /var/log/nginx/access.log".', answer: 'Ferramenta interativa de escuta. Acompanha em streaming o rodapé dinâmico crescente do log mapeando os IPs externos reais acessando os métodos HTTP públicos neste exato milissegundo virtual.' },
+            { category: 'Load Balance', question: 'Qual a arquitetura clássica do tráfego com Load Balancer e Proxy Reverso?', answer: 'O navegador web conecta APENAS ao Proxy/Load Balancer expondo as portas restritas e ele atua roteando internamente o pedido bruto mascarado HTTP puro aos clusters de workers (servidores reais ocultos).' },
+            { category: 'Ação Suave (Sysadmin)', question: 'Para que serve o "systemctl reload nginx"?', answer: 'Ele recarrega sem quebrar. É o "Graceful reload", fechando graciosamente instâncias de rede sem derrubar o site de quem está lendo ou transferindo arquivos ao vivo.' },
+            { category: 'Arquitetura HTTP', question: 'Qual a porta clássica do HTTP Inseguro e do HTTPS criptografado SSL TLS?', answer: 'A porta padrão do HTTP bruto inseguro focado em tráfego de texto exposto lendo 80. O HTTPS blindado focado em segurança L4 de e-commerce é a porta alocada 443.' },
+
+            // --- MÓDULO 4: CLOUD COMPUTING (10 Cards) ---
+            { category: 'Computação em Nuvem', question: 'O que significa a mudança econômica CAPEX vs OPEX?', answer: 'CAPEX: Investimento custoso comprando o próprio hardware físico. OPEX: Nuvem. A despesa operacional mensal que se molda pagando apenas consumo.' },
+            { category: 'As a Service', question: 'Defina o pilar básico IaaS com 1 exemplo de uso prático real.', answer: 'Infraestrutura (VM pura) na nuvem. A AWS me entrega instâncias do Amazon EC2 nulas que eu aplico a imagem do Linux e administro firewall/roteamento L3 L4 de controle.' },
+            { category: 'As a Service', question: 'O que significa SaaS e como se aplica comercialmente ao público.', answer: 'O provedor aloca software fechado criptografado focado 100% no modelo SaaS em que eu final usuário pago assinatura de uso de interfaces Google Workspace sem dor de cabeças locais.' },
+            { category: 'Auto-Scaling', question: 'Defina a essência da Elasticidade computacional elástica (Auto Scaling)?', answer: 'Magia de infraestrutura alocando clones exatos dinâmicos de CPU (horizontal) sob picos severos, cortando no silêncio noturno de tráfego, mitigando fatura OPEX altíssima.' },
+            { category: 'AWS CLI', question: 'A função vital utilitária do "aws configure" via Linux Bash.', answer: 'Ferramenta fundamental CLI de integração que conecta e credencia local e seguramente o terminal do programador com Access Key à Cloud API para gerir as instâncias (EC2, S3).' },
+            { category: 'Camada de Rede (AWS)', question: 'O que o Security Group da Máquina Virtual de Cloud significa?', answer: 'Ele é o verdadeiro escudo firewall (portas INGRESS e rotas de redes de tráfego EGRESS) do IaaS que precisa ser fechado com regras restritas liberando os serviços nativos alocados publicamente.' },
+            { category: 'Big 3', question: 'Cite os Três Gigantes corporativos e líderes trilionários de Nuvem global.', answer: 'Amazon AWS (a rainha do marketshare), Microsoft AZURE (Integrações com ecossistemas Windows Híbridos) e GOOGLE Cloud Plataform GCP.' },
+            { category: 'Linha de Comando (CLI)', question: 'Como um sysadmin lista virtualmente as Máquinas criadas remotas nas APIs na conta AWS?', answer: 'Através de seu terminal configurado aplicando ordens padronizadas de consulta "aws ec2 describe-instances" capturando o inventário metadata completo do data center.' },
+            { category: 'PaaS Model', question: 'A enorme facilidade que devs enxergam na Platforma AWS Elastic Beanstalk (PaaS)?', answer: 'O modelo que abstrai tudo de rede e firewall. Focado no código, você empacota seu software envia os ZIP e eles orquestram SO, Kubernetes auto-scale garantido pelas APIs do provedor em questão.' },
+            { category: 'Nomenclatura (EC2, VM, CE)', question: 'A nomenclatura de Máquina Virtual para as 3 gigantes de mercado público global.', answer: 'A robusta Amazon (AWS) utiliza nomenclatura pioneira EC2. A Azure atua mapeando de Virtual Machines globais. A Cloud Google GCP apelidou Compute Engine focado.' },
+
+            // --- MÓDULO 5: SEGURANÇA (10 Cards) ---
+            { category: 'Camadas (L3/L4 vs L7)', question: 'A diferença crucial do Firewall base (IPTables) vs barreira de aplicação (WAF)?', answer: 'O firewall só olha IPS de fora e número de Portas L3 cortando pacotes perigosos. Mas a Injeção de SQL atua infiltrada no acesso limpo da Porta Web L7 (80), parando apenas contra o WAF.' },
+            { category: 'Análise de Rede (IDS/IPS)', question: 'Diferença comportamental de sensores virtuais de monitoração focados IDS e bloqueios focado IPS?', answer: 'IDS monitora log passivo (a câmera do prédio dispara sirene focado intrusos). O IPS ativo intervém tráfego de pacotes cortando rotas roteador fisicamente nocivas da conexão local (o leão de chácara cortando o acesso).' },
+            { category: 'Gerenciamento (IAM)', question: 'A salvação e solução arquitetural contra o uso restritivo do "Usuários Locais em máquinas isoladas"?', answer: 'O Active Directory AD (Windows Server corporativo base) e ferramentas open de autenticação de domínio local como OpenLDAP centralizando contas, senhas ativas (se desliga a conta na matriz bloqueia todo data center local instantaneamente).' },
+            { category: 'Armazenamento de Log', question: 'No modelo hierárquico FHS a pasta e log focado Syslog alocado no Kernel central atua?', answer: 'A /var/log/syslog é crucial pois captura 100% dos eventos que Kernel da placa emite focado tráfego SSH quebrado e falhas operacionais e crashs diários salvando em registro fixo diário local.' },
+            { category: 'Auditoria SOC (SIEM)', question: 'Como lidar e o que é o sistema focado monitorando centrais espaciais bilhões de dados gerados: Plataforma (SIEM)?', answer: 'A plataforma massiva focada em cruzar IA analisando bilhões de eventos log isolados e mapear, e gerar anomalias baseadas em fuso focado conexões da matriz contra invasão combinando alertas inteligentes simultâneos corporativos interligados.' },
+            { category: 'O Combate Local', question: 'No servidor sem proteção qual script nativo bloqueando brute-force massivos (Fail2Ban)?', answer: 'Analisa e escuta o syslog em milissegundos e localizando 5 senhas erradas no terminal injeta proativamente bloqueio Firewall iptables alocando restrição temporária local do IP do intruso de conectar.' },
+            { category: 'Princípio do Fechamento', question: 'Em infraestrutura de internet Cloud (Política "Default Deny") determina fechar tudo limitando redes virtuais?', answer: 'Regra de ouro. Feche blindado a todas as portas L4 alocadas mapeadas por invasores bloqueando requisições, abrindo unicamente conexões explicitamente restritas (443, 22), rejeitando tráfego sem exceção ao acessar as camadas.' },
+            { category: 'Scans de Vulnerabilidade', question: 'Auditoria sysadmin ativa via ferramentas como NMAP no terminal da VM focado atua onde local?', answer: 'Executado para fazer o mesmo scan interativo focando portas abertas de serviços ocultos na máquina listando e monitorando gargalos focados revelando tráfegos de intrusos e configurações em nuvens.' },
+            { category: 'Princípio Menor Privilégio', question: 'Na infraestrutura Debian a má prática operando de Root e permissão "rwx 777" afeta os recursos?', answer: 'Qualquer serviço oculto ativo, software corrompido, e invasor logado ganha imunidade para alterar, apagar executando binários root irrestritamente destruindo arquiteturas das aplicações conectadas FHS de acesso e destruindo logs e discos corporativos baseados.' },
+            { category: 'Serviço IAM & Raio L2', question: 'A base do Serviço de raio de internet autenticador (Protocolo Radius)?', answer: 'A solução baseada centralizando chaves em provedores acessando VPNs em switches que roteiam redes roteadas focado autorizar WiFi base da empresa focado autenticação central distribuída interativa na nuvem interligada e fechada nas VLANs virtuais baseadas.' }
+        ];
+
+        // APP STATE
+        let filteredQuiz = [...questionBank];
+        let currentQuizIndex = 0;
+        let userAnswers = {}; // questionId -> optionIndex
+        let userXP = 0;
+        let answeredQuestions = new Set();
+        
+        let currentFlashcardIndex = 0;
+        let isFlashcardFlipped = false;
+
+        let currentTerminalTask = 1;
+
+        // INITIALIZATION
+        window.onload = function() {
+            renderQuizQuestion();
+            renderFlashcard();
+        };
+
+        // NAVIGATION SWITCHER
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-senai-blue', 'text-white', 'shadow-md');
+                btn.classList.add('bg-slate-800', 'text-slate-300');
+            });
+
+            document.querySelectorAll('.tab-view').forEach(view => {
+                view.classList.add('hidden');
+            });
+
+            const activeBtn = document.getElementById(`tab-${tabName}`);
+            const activeView = document.getElementById(`view-${tabName}`);
+
+            if (activeBtn && activeView) {
+                activeBtn.classList.remove('bg-slate-800', 'text-slate-300');
+                activeBtn.classList.add('bg-senai-blue', 'text-white', 'shadow-md');
+                activeView.classList.remove('hidden');
+            }
+        }
+
+        // QUIZ LOGIC
+        function filterQuiz(category) {
+            document.querySelectorAll('.quiz-filter-btn').forEach(btn => {
+                btn.classList.remove('border-senai-blue', 'bg-senai-blue/20', 'text-blue-300');
+                btn.classList.add('border-slate-700', 'bg-slate-900', 'text-slate-400');
+            });
+            event.target.classList.remove('border-slate-700', 'bg-slate-900', 'text-slate-400');
+            event.target.classList.add('border-senai-blue', 'bg-senai-blue/20', 'text-blue-300');
+
+            if (category === 'all') {
+                filteredQuiz = [...questionBank];
+            } else {
+                filteredQuiz = questionBank.filter(q => q.category === category);
+            }
+            currentQuizIndex = 0;
+            renderQuizQuestion();
+        }
+
+        function renderQuizQuestion() {
+            if (filteredQuiz.length === 0) return;
+
+            const q = filteredQuiz[currentQuizIndex];
+            
+            // UI elements
+            document.getElementById('question-badge').innerText = `Tópico: ${q.categoryLabel}`;
+            document.getElementById('question-counter').innerText = `Questão ${currentQuizIndex + 1} de ${filteredQuiz.length}`;
+            document.getElementById('question-text').innerText = q.question;
+
+            // Progress Bar
+            const progressPercent = ((currentQuizIndex + 1) / filteredQuiz.length) * 100;
+            document.getElementById('quiz-progress-bar').style.width = `${progressPercent}%`;
+
+            // Prev/Next buttons state
+            document.getElementById('btn-prev').disabled = currentQuizIndex === 0;
+            document.getElementById('btn-next').innerText = currentQuizIndex === filteredQuiz.length - 1 ? 'Finalizar Simulado' : 'Próxima';
+
+            // Options Container
+            const container = document.getElementById('options-container');
+            container.innerHTML = '';
+
+            const hasAnswered = userAnswers.hasOwnProperty(q.id);
+            const selectedOption = userAnswers[q.id];
+
+            q.options.forEach((optText, idx) => {
+                const btn = document.createElement('button');
+                btn.className = `w-full text-left p-4 rounded-2xl border transition flex items-start space-x-3 text-sm sm:text-base font-medium `;
+
+                if (!hasAnswered) {
+                    btn.className += `bg-slate-900/80 border-slate-700 text-slate-200 hover:border-senai-blue hover:bg-slate-800`;
+                    btn.onclick = () => selectOption(q.id, idx);
+                } else {
+                    btn.disabled = true;
+                    if (idx === q.correct) {
+                        btn.className += `bg-emerald-500/20 border-emerald-500 text-emerald-300 font-semibold`;
+                    } else if (idx === selectedOption && idx !== q.correct) {
+                        btn.className += `bg-rose-500/20 border-rose-500 text-rose-300`;
+                    } else {
+                        btn.className += `bg-slate-900/40 border-slate-800 text-slate-500 opacity-60`;
+                    }
+                }
+
+                const letter = String.fromCharCode(65 + idx);
+                btn.innerHTML = `
+                    <span class="w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 ${hasAnswered && idx === q.correct ? 'bg-emerald-500 text-slate-950' : (hasAnswered && idx === selectedOption ? 'bg-rose-500 text-white' : 'bg-slate-800 text-slate-400 border border-slate-700')}">
+                        ${letter}
+                    </span>
+                    <span class="pt-0.5">${optText}</span>
+                `;
+                container.appendChild(btn);
+            });
+
+            // Explanation box
+            const explanationBox = document.getElementById('explanation-box');
+            if (hasAnswered) {
+                explanationBox.classList.remove('hidden');
+                const isCorrect = selectedOption === q.correct;
+                
+                explanationBox.className = `mt-6 p-5 rounded-2xl border transition-all ${isCorrect ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-200' : 'bg-rose-950/40 border-rose-500/40 text-rose-200'}`;
+                document.getElementById('explanation-icon').innerHTML = isCorrect ? '<i class="fa-solid fa-circle-check text-emerald-400"></i>' : '<i class="fa-solid fa-circle-xmark text-rose-400"></i>';
+                document.getElementById('explanation-title').innerText = isCorrect ? 'Resposta Correta! (+50 XP)' : 'Resposta Incorreta!';
+                document.getElementById('explanation-text').innerText = q.explanation;
+            } else {
+                explanationBox.classList.add('hidden');
+            }
+        }
+
+        function selectOption(questionId, optionIdx) {
+            const q = questionBank.find(item => item.id === questionId);
+            if (!q) return;
+
+            userAnswers[questionId] = optionIdx;
+
+            if (!answeredQuestions.has(questionId)) {
+                answeredQuestions.add(questionId);
+                if (optionIdx === q.correct) {
+                    userXP += 50;
+                    document.getElementById('user-xp').innerText = userXP;
+                }
+                updateAccuracy();
+            }
+
+            renderQuizQuestion();
+        }
+
+        function updateAccuracy() {
+            let totalAnswered = Object.keys(userAnswers).length;
+            if (totalAnswered === 0) return;
+
+            let correctCount = 0;
+            for (let qId in userAnswers) {
+                const question = questionBank.find(q => q.id == qId);
+                if (question && userAnswers[qId] === question.correct) {
+                    correctCount++;
+                }
+            }
+
+            const accuracy = Math.round((correctCount / totalAnswered) * 100);
+            document.getElementById('user-accuracy').innerText = `${accuracy}%`;
+        }
+
+        function navigateQuiz(direction) {
+            currentQuizIndex += direction;
+            if (currentQuizIndex < 0) currentQuizIndex = 0;
+            if (currentQuizIndex >= filteredQuiz.length) {
+                currentQuizIndex = filteredQuiz.length - 1;
+                alert('Parabéns! Você completou todas as questões filtradas deste simulado.');
+            }
+            renderQuizQuestion();
+        }
+
+        function resetQuiz() {
+            userAnswers = {};
+            answeredQuestions.clear();
+            userXP = 0;
+            document.getElementById('user-xp').innerText = 0;
+            document.getElementById('user-accuracy').innerText = '100%';
+            currentQuizIndex = 0;
+            renderQuizQuestion();
+        }
+
+        // FLASHCARD LOGIC
+        function renderFlashcard() {
+            const fc = flashcardsData[currentFlashcardIndex];
+            document.getElementById('fc-category').innerText = fc.category;
+            document.getElementById('fc-question').innerText = fc.question;
+            document.getElementById('fc-answer').innerText = fc.answer;
+            document.getElementById('fc-counter').innerText = `Cartão ${currentFlashcardIndex + 1} de ${flashcardsData.length}`;
+
+            // Reset flip state on change
+            const container = document.querySelector('.card-flip-container');
+            container.classList.remove('flipped');
+            isFlashcardFlipped = false;
+        }
+
+        function flipFlashcard() {
+            const container = document.querySelector('.card-flip-container');
+            isFlashcardFlipped = !isFlashcardFlipped;
+            if (isFlashcardFlipped) {
+                container.classList.add('flipped');
+            } else {
+                container.classList.remove('flipped');
+            }
+        }
+
+        function nextFlashcard() {
+            currentFlashcardIndex = (currentFlashcardIndex + 1) % flashcardsData.length;
+            renderFlashcard();
+        }
+
+        function prevFlashcard() {
+            currentFlashcardIndex = (currentFlashcardIndex - 1 + flashcardsData.length) % flashcardsData.length;
+            renderFlashcard();
+        }
+
+        // TERMINAL SIMULATOR LOGIC
+        const terminalCommands = {
+            'help': 'Comandos de estudo disponíveis:\n- ls -ld [pasta] : Lista detalhes e permissões de uma pasta.\n- chown [user]:[group] [arquivo] : Altera o proprietário e o grupo.\n- chmod [permissão] [arquivo] : Altera permissões rwx (ex: 770).\n- ip a : Exibe as interfaces de rede e os IPs alocados.\n- ping -c 4 [host] : Testa conectividade enviando 4 pacotes ICMP.\n- systemctl status/restart [servico] : Gerencia serviços do systemd.\n- cat /etc/os-release : Exibe informações do sistema operacional.\n- top ou htop : Exibe consumo em tempo real de CPU e RAM.\n- nginx -t : Testa sintaxe de configuração do Nginx.\n- tail -n 20 /var/log/syslog : Exibe últimas 20 linhas de logs.\n- curl -I "http://meusite.com/?id=1\' OR \'1\'=\'1" : Simula SQLi (WAF).\n- docker ps : Lista containers ativos.',
+            'top': 'top - 13:02:45 up 120 days, 2 users, load average: 0.15, 0.08, 0.02\nTasks: 112 total,   1 running, 111 sleeping\n%Cpu(s):  2.3 us,  0.7 sy,  0.0 ni, 96.8 id,  0.2 wa\nMiB Mem :   7950.4 total,   3410.1 free,   2110.8 used,   2429.5 buff/cache\n\n  PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND\n 1420 www-data  20   0  145800  28400  12100 S   1.8   0.4   0:45.12 nginx\n 2104 postgres  20   0  389400  84200  42100 S   0.5   1.1   1:12.80 postgres\n [SUCESSO] Você identificou o uso de recursos. Gargalos zerados!',
+            'htop': 'htop - Exibindo consumo de núcleos e memória.\nCPU[|||||                                    12.4%] \nMem[||||||||||||||||||||                    2.11G/7.76G]\nTask em background: 112 daemons ativos.\n[SUCESSO] Diagnóstico verificado com sucesso!',
+            'nginx -t': 'nginx: the configuration file /etc/nginx/nginx.conf syntax is ok\nnginx: configuration file /etc/nginx/nginx.conf test is successful\n[SUCESSO] Sintaxe do Nginx validada sem erros de configuração!',
+            'tail -n 20 /var/log/syslog': 'Nov 11 12:45:01 server systemd[1]: Starting System Logging Service...\nNov 11 12:45:02 server kernel: [    0.000000] Linux version 6.1.0-18-amd64\nNov 11 13:00:10 server sshd[4912]: Failed password for invalid user admin from 192.168.1.100 port 52341 ssh2\nNov 11 13:00:14 server sshd[4915]: Failed password for root from 192.168.1.100 port 52344 ssh2\nNov 11 13:01:00 server WAF[102]: Blocked SQLi payload in HTTP request from 189.4.12.99\n[LOG AUDIT] Alertas capturados pelo Syslog com sucesso!',
+            'docker ps': 'CONTAINER ID   IMAGE          COMMAND                  CREATED        STATUS        PORTS                  NAMES\ne7a41b2c9012   nginx:alpine   "/docker-entrypoint.…"   2 hours ago    Up 2 hours    0.0.0.0:80->80/tcp     web_frontend\n9b3f412d8a55   redis:7        "docker-entrypoint.s…"   5 hours ago    Up 5 hours    6379/tcp               cache_redis\n[SUCESSO] 2 Containers ativos compartilhando o Kernel hospedeiro!',
+            'ip a': '1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000\n    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00\n    inet 127.0.0.1/8 scope host lo\n2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000\n    link/ether 00:15:5d:01:b3:f1 brd ff:ff:ff:ff:ff:ff\n    inet 192.168.1.150/24 brd 192.168.1.255 scope global dynamic eth0\n[SUCESSO] Interfaces de rede listadas com sucesso!',
+            'cat /etc/os-release': 'PRETTY_NAME="Debian GNU/Linux 13 (trixie)"\nNAME="Debian GNU/Linux"\nVERSION_ID="13"\nVERSION="13 (trixie)"\nID=debian\nHOME_URL="https://www.debian.org/"\n[SUCESSO] Você identificou que o servidor roda a distribuição Debian 13.',
+            'systemctl status apache2': '● apache2.service - The Apache HTTP Server\n     Loaded: loaded (/lib/systemd/system/apache2.service; enabled; vendor preset: enabled)\n     Active: active (running) since Wed 2026-11-11 12:45:01 BRT; 30min ago\n   Main PID: 1256 (apache2)\n      Tasks: 55 (limit: 4615)\n     Memory: 22.4M\n     CGroup: /system.slice/apache2.service\n[SUCESSO] O serviço apache2 (servidor web) está rodando perfeitamente!',
+            'chmod 770 /srv/projeto': '[EXECUTADO] chmod 770 /srv/projeto executado silenciosamente (padrão Linux).\nVerificação interna: O arquivo agora tem permissões drwxrwx---.\nO dono (root) e o grupo do projeto agora têm acesso total. Visitantes externos bloqueados.',
+            'ping -c 4 debian.org': 'PING debian.org (130.89.148.77) 56(84) bytes of data.\n64 bytes from debian.org (130.89.148.77): icmp_seq=1 ttl=52 time=224 ms\n64 bytes from debian.org (130.89.148.77): icmp_seq=2 ttl=52 time=225 ms\n64 bytes from debian.org (130.89.148.77): icmp_seq=3 ttl=52 time=223 ms\n64 bytes from debian.org (130.89.148.77): icmp_seq=4 ttl=52 time=224 ms\n\n--- debian.org ping statistics ---\n4 packets transmitted, 4 received, 0% packet loss, time 3004ms\nrtt min/avg/max/mdev = 223.12/224.23/225.43/1.24 ms\n[SUCESSO] Conectividade com a internet confirmada!'
+        };
+
+        function handleTerminalSubmit(e) {
+            e.preventDefault();
+            const input = document.getElementById('terminal-input');
+            const cmd = input.value.trim();
+            if (!cmd) return;
+
+            appendTerminalLine(`root@unisenai-server:# ${cmd}`, 'text-emerald-400 font-bold');
+            
+            // Check exact or partial matching for SQLi command
+            if (cmd.includes('curl') && cmd.includes('OR')) {
+                appendTerminalLine('HTTP/1.1 403 Forbidden\nServer: WAF-Guard-L7\nContent-Type: text/html\nDate: Wed, 11 Nov 2026 13:02:00 GMT\n<HTML><BODY>403 Forbidden: Injeção de SQL Bloqueada pelo WAF (Camada 7)</BODY></HTML>', 'text-amber-300');
+                userXP += 30;
+                document.getElementById('user-xp').innerText = userXP;
+            } else if (terminalCommands[cmd]) {
+                appendTerminalLine(terminalCommands[cmd], 'text-slate-300');
+                userXP += 20;
+                document.getElementById('user-xp').innerText = userXP;
+            } else if (cmd.startsWith('systemctl restart')) {
+                appendTerminalLine('[EXECUTADO] Reiniciando serviço silenciosamente (como padrão no systemd)...', 'text-slate-300');
+                userXP += 10;
+                document.getElementById('user-xp').innerText = userXP;
+            } else if (cmd.startsWith('chown') || cmd.startsWith('ls')) {
+                appendTerminalLine('[EXECUTADO] Operação de gerenciamento de arquivo concluída.', 'text-slate-300');
+                userXP += 10;
+                document.getElementById('user-xp').innerText = userXP;
+            } else {
+                appendTerminalLine(`bash: command not found: ${cmd}. Digite 'help' para ver os comandos disponíveis.`, 'text-rose-400');
+            }
+
+            input.value = '';
+            const body = document.getElementById('terminal-body');
+            body.scrollTop = body.scrollHeight;
+        }
+
+        function executeQuickCmd(cmdText) {
+            document.getElementById('terminal-input').value = cmdText;
+            document.querySelector('#view-terminal form').dispatchEvent(new Event('submit'));
+        }
+
+        function appendTerminalLine(text, className = '') {
+            const body = document.getElementById('terminal-body');
+            const div = document.createElement('div');
+            div.className = `whitespace-pre-wrap leading-relaxed ${className}`;
+            div.innerText = text;
+            body.appendChild(div);
+        }
+
+        function clearTerminal() {
+            document.getElementById('terminal-body').innerHTML = '<div class="text-slate-400">Terminal limpo. Digite <span class="text-emerald-400 font-bold">help</span> para lista de comandos.</div>';
+        }
+    </script>
+</body>
+</html>
